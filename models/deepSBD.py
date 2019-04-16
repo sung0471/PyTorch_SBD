@@ -23,7 +23,7 @@ class deepSBD(nn.Module):
                                padding=1, bias=True)
         self.relu5=nn.ReLU(inplace=True)
         self.pool1=nn.MaxPool3d(kernel_size=(3, 3, 3), stride=(1,2,2), padding=0)
-        self.fc6=nn.Linear(100352, 2048)
+        self.fc6=nn.Linear(100352, 2048) #301056
         self.relu6=nn.ReLU(inplace=True)
         self.fc7=nn.Linear(2048, 2048)
         self.relu7=nn.ReLU(inplace=True)

@@ -1,28 +1,15 @@
-import os
-import sys
 import json
-import numpy as np
-import torch
-from torch import nn
-from torch import optim
-from torch.optim import lr_scheduler
 
 from opts import *
-from models import generate_model
 from lib.spatial_transforms import *
 
-from data.data_loader import DataSet
-from lib.utils import Logger
-from cls import build_model
-import time
+from raw.cls import build_model
 import os,cv2
-import sys
 from PIL import Image
 
-from lib.utils import AverageMeter, calculate_accuracy
 from torch.autograd import Variable
-from torch.optim import lr_scheduler
-import eval_res
+from raw import eval_res
+
 
 def get_label(res_tensor):
     res_numpy=res_tensor.data.cpu().numpy()
@@ -31,7 +18,7 @@ def get_label(res_tensor):
         labels.append(np.argmax(row))
     return labels
 
-def deepSBD(video_path,temporal_length,model,spatial_transform,batch_size,**args):
+def deepSBD(video_path,temporal_length,model,spatial_transform,batch_size,device,**args):
     assert(os.path.exists(video_path))
     videocap=cv2.VideoCapture(video_path)
     status=True
@@ -47,17 +34,17 @@ def deepSBD(video_path,temporal_length,model,spatial_transform,batch_size,**args
                 frame=Image.fromarray(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)).convert('RGB')
                 frame=spatial_transform(frame)
                 image_clip.append(frame)
-        
+
         image_clip+=[image_clip[-1] for _ in range(temporal_length-len(image_clip))]
 
         if len(image_clip)==temporal_length:
             clip = torch.stack(image_clip, 0).permute(1, 0, 2, 3)
             clip_batch.append(clip)
             image_clip=image_clip[int(temporal_length/2):]
-        
+
         if len(clip_batch)==batch_size or not status:
             clip_tensor=torch.stack(clip_batch, 0)
-            clip_tensor=Variable(clip_tensor).cuda()
+            clip_tensor=Variable(clip_tensor)
             results=model(clip_tensor)
             labels+=get_label(results)
             clip_batch=[]
@@ -85,14 +72,14 @@ def load_checkpoint(model,path):
     checkpoint = torch.load(path)
     model.load_state_dict(checkpoint['state_dict'])
 
-def get_result(opt,model):
+def get_result(opt,model,device):
     spatial_transforms=get_test_spatial_transform(opt)
     video_list=load_video_list(opt.test_list_path)
     res={}
 
-    for idx,videoname in enumerate(video_list):
+    for idx, videoname in enumerate(video_list):
         print("Process {} {}".format(idx,videoname),flush=True)
-        labels=deepSBD(os.path.join(opt.root_dir,opt.test_subdir,videoname),opt.sample_duration,model,spatial_transforms,opt.batch_size)
+        labels=deepSBD(os.path.join(opt.root_dir,opt.test_subdir,videoname),opt.sample_duration,model,spatial_transforms,opt.batch_size,device)
         _res={'cut':[],'gradual':[]}
         for begin,end,label in labels:
             if label==2:
@@ -103,23 +90,26 @@ def get_result(opt,model):
     return res
 
 
-def test(opt,model):
+def test(opt,model,device):
     out_path=os.path.join(opt.result_dir,'results.json')
     if not os.path.exists(out_path):
-        res=get_result(opt,model)
+        res=get_result(opt,model,device)
         json.dump(res,open(out_path,'w'))
     
-    eval_res.eval(out_path,opt.gt_dir)
+    eval_res.eval(out_path, opt.gt_dir)
 
 def main(opt):
-    model = build_model(opt,"test")
-    load_checkpoint(model,opt.weights)
+    # `19.3.21. add (device)
+    device=torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
+    model = build_model(opt, "test")
+    load_checkpoint(model, opt.weights)
     model.eval()
-    test(opt,model)
+    test(opt,model,device)
 
 if __name__ == '__main__':
     opt = parse_test_args()
-    test(opt)
-
-
-    
+    # 19.3.21 revision
+    # change test(opt) > main(opt)
+    # test(opt)
+    print(opt)
+    main(opt)

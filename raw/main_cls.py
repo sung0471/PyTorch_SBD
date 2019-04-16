@@ -1,27 +1,18 @@
-import os
-import sys
-import json
-import numpy as np
-import torch
 from torch import nn
 from torch import optim
-from torch.optim import lr_scheduler
 
 from opts import parse_opts
-from models import generate_model
 from lib.spatial_transforms import *
 
-from data.data_loader import DataSet
-from lib.utils import Logger
-from cls import build_model
+from data.train_data_loader import DataSet
+from raw.cls import build_model
 import time
 import os
-import sys
 
 from lib.utils import AverageMeter, calculate_accuracy
 from torch.autograd import Variable
 from torch.optim import lr_scheduler
-from test_cls import test
+from raw.test_cls import test
 
 def get_mean(norm_value=255):
     return [114.7748 / norm_value, 107.7354 / norm_value, 99.4750 / norm_value]
@@ -32,12 +23,19 @@ def calculate_accuracy(outputs, targets):
     _, pred = outputs.topk(1, 1, True)
     pred = pred.t()
     correct = pred.eq(targets.view(1, -1))
-    n_correct_elems = correct.float().sum().data[0]
+    n_correct_elems = correct.float().sum().data
 
     return n_correct_elems / batch_size
     
-def train(cur_iter, total_iter,data_loader, model, criterion, optimizer,scheduler, opt):
+# 19.3.8 revision
+# add parameter : "device"
+def train(cur_iter, total_iter,data_loader, model, criterion, optimizer,scheduler, opt, device):
     model.eval()
+
+    # 19.3.14. add
+    print("device : ",torch.cuda.get_device_name(0))
+    # torch.set_default_tensor_type('torch.cuda.DoubleTensor')
+    model.to(device)
 
     batch_time = AverageMeter()
     data_time = AverageMeter()
@@ -46,14 +44,25 @@ def train(cur_iter, total_iter,data_loader, model, criterion, optimizer,schedule
 
     end_time = time.time()
     i=cur_iter
+
+    # for debug
+    # print(not(opt.no_cuda)) : True
+    print('\n====> Training Start')
     while i<total_iter:
         for _,(inputs,targets) in enumerate(data_loader):
 
-            if not opt.no_cuda:
-                targets = targets.cuda(async=True)
+            # 19.3.7 add
+            # if not opt.no_cuda:
+            #     targets = targets.cuda(async=True)
+            #     inputs = inputs.cuda(async=True)
 
             targets = Variable(targets)
             inputs = Variable(inputs)
+
+            # 19.3.8. revision
+            if not opt.no_cuda:
+                targets= targets.to(device)
+                inputs= inputs.to(device)
 
             outputs = model(inputs)
 
@@ -64,9 +73,9 @@ def train(cur_iter, total_iter,data_loader, model, criterion, optimizer,schedule
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
-            scheduler.step(loss.data[0])
+            scheduler.step(loss.data)
 
-            print('Iter:{} Loss_conf:{} acc:{} lr:{}'.format(i+1,loss.data[0],acc,optimizer.param_groups[0]['lr']),flush=True)
+            print('Iter:{} Loss_conf:{} acc:{} lr:{}'.format(i+1,loss.data,acc,optimizer.param_groups[0]['lr']),flush=True)
             i+=1
                 
             if i%2000==0:
@@ -107,7 +116,6 @@ def get_lastest_model(opt):
 if __name__ == '__main__':
     opt = parse_opts()
 
-
     opt.scales = [opt.initial_scale]
     for i in range(1, opt.n_scales):
         opt.scales.append(opt.scales[-1] * opt.scale_step)
@@ -117,7 +125,13 @@ if __name__ == '__main__':
 
     torch.manual_seed(opt.manual_seed)
 
-    model = build_model(opt,"train")
+    # 19.3.8. add
+    device=torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
+    print("cuda is available : ",torch.cuda.is_available())
+
+    # model = build_model(opt,"train")
+    model=build_model(opt,"train",device)
+
     cur_iter=0
     if opt.auto_resume and opt.resume_path=='':
         cur_iter=get_lastest_model(opt)
@@ -127,9 +141,8 @@ if __name__ == '__main__':
 
         model.load_state_dict(checkpoint['state_dict'])
 
-
-    parameters=model.parameters()
-    criterion =  nn.CrossEntropyLoss()
+    parameters = model.parameters()
+    criterion = nn.CrossEntropyLoss()
     if opt.nesterov:
         dampening = 0
     else:
@@ -138,14 +151,24 @@ if __name__ == '__main__':
     optimizer = optim.SGD(parameters, lr=opt.learning_rate,
                               momentum=opt.momentum, dampening=dampening,
                               weight_decay=opt.weight_decay, nesterov=opt.nesterov)
+
+    # 19.3.8 revision
     if not opt.no_cuda:
-        criterion = criterion.cuda()
+        # criterion = criterion.cuda()
+        criterion=criterion.to(device)
 
     if not opt.no_train:
         spatial_transform = get_train_spatial_transform(opt)
         temporal_transform = None
         target_transform = None
-        training_data = DataSet(os.path.join(opt.root_dir,opt.train_subdir),opt.image_list_path,
+        # list_root_path : train path, only_gradual path
+        # `19.3.7 : add only_gradual path
+        list_root_path=[]
+        list_root_path.append(os.path.join(opt.root_dir,opt.train_subdir))
+        list_root_path.append(os.path.join(opt.root_dir,'only_gradual'))
+        print(list_root_path)
+        print(opt.image_list_path)
+        training_data = DataSet(list_root_path,opt.image_list_path,
                                         spatial_transform=spatial_transform,
                                         temporal_transform=temporal_transform,
                                         target_transform=target_transform, sample_duration=opt.sample_duration)
@@ -157,9 +180,15 @@ if __name__ == '__main__':
                                                             num_workers=opt.n_threads,sampler=sampler, pin_memory=True)
 
 
-        scheduler = lr_scheduler.ReduceLROnPlateau(optimizer, 'min',patience=60000)
+        scheduler = lr_scheduler.ReduceLROnPlateau(optimizer, 'min', patience=60000)
 
-        train(cur_iter,opt.total_iter,training_data_loader, model, criterion, optimizer,scheduler,
-                    opt)
+        # 19.3.8. add
+        # train(cur_iter,opt.total_iter,training_data_loader, model, criterion, optimizer,scheduler,opt)
+        train(cur_iter,opt.total_iter,training_data_loader, model, criterion, optimizer,scheduler,opt, device)
+        test(opt,model,device)
 
-    test(opt,model)
+    # 19.3.21 add
+    # add else:
+    # train, test부분 분리
+    else:
+        test(opt,model,device)

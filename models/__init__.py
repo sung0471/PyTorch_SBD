@@ -7,7 +7,7 @@ def generate_model(opt):
     assert opt.model in ['resnet', 'alexnet']
 
     if opt.model=='alexnet':
-        model=deepSBD()
+        model = deepSBD()
     elif opt.model == 'resnet':
         from models.resnet import get_fine_tuning_parameters
 

@@ -16,12 +16,17 @@ def conv3x3x3(in_planes, out_planes, stride=1):
 
 
 def downsample_basic_block(x, planes, stride):
+    # 19.3.21 add
+    device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
+
     out = F.avg_pool3d(x, kernel_size=1, stride=stride)
     zero_pads = torch.Tensor(out.size(0), planes - out.size(1),
                              out.size(2), out.size(3),
                              out.size(4)).zero_()
     if isinstance(out.data, torch.cuda.FloatTensor):
-        zero_pads = zero_pads.cuda()
+        # 19.3.21 revise
+        # zero_pads = zero_pads.cuda()
+        zero_pads = zero_pads.to(device)
 
     out = Variable(torch.cat([out.data, zero_pads], dim=1))
 
@@ -29,6 +34,7 @@ def downsample_basic_block(x, planes, stride):
 
 
 class BasicBlock(nn.Module):
+    device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
     expansion = 1
 
     def __init__(self, inplanes, planes, stride=1, downsample=None):
@@ -42,6 +48,7 @@ class BasicBlock(nn.Module):
         self.stride = stride
 
     def forward(self, x):
+        x = x.to(self.device)
         residual = x
 
         out = self.conv1(x)
@@ -61,6 +68,7 @@ class BasicBlock(nn.Module):
 
 
 class Bottleneck(nn.Module):
+    device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
     expansion = 4
 
     def __init__(self, inplanes, planes, stride=1, downsample=None):
@@ -77,6 +85,7 @@ class Bottleneck(nn.Module):
         self.stride = stride
 
     def forward(self, x):
+        x = x.to(self.device)
         residual = x
 
         out = self.conv1(x)
@@ -100,7 +109,8 @@ class Bottleneck(nn.Module):
 
 
 class ResNet(nn.Module):
-    
+    device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
+
     def __init__(self, block, layers, sample_size, sample_duration, shortcut_type='B', num_classes=400):
         self.inplanes = 64
         super(ResNet, self).__init__()
@@ -143,7 +153,7 @@ class ResNet(nn.Module):
                     bn
                 )
 
-        layers = []
+        layers = list()
         layers.append(block(self.inplanes, planes, stride, downsample))
         self.inplanes = planes * block.expansion
         for i in range(1, blocks):
@@ -152,6 +162,8 @@ class ResNet(nn.Module):
         return nn.Sequential(*layers)
 
     def forward(self, x):
+        x = x.to(self.device)
+
         x = self.conv1(x)
         x = self.bn1(x)
 
