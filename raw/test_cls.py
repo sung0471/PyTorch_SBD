@@ -3,7 +3,7 @@ import json
 from opts import *
 from lib.spatial_transforms import *
 
-from raw.cls import build_model
+from cls import build_model
 import os,cv2
 from PIL import Image
 

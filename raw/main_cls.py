@@ -5,7 +5,7 @@ from opts import parse_opts
 from lib.spatial_transforms import *
 
 from data.train_data_loader import DataSet
-from raw.cls import build_model
+from cls import build_model
 import time
 import os
 

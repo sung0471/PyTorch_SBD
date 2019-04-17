@@ -20,8 +20,8 @@ def build_model(opt, phase, device):
         model.load_weights(opt.pretrain_path)
 
     # `19.3.8
-    # model = model.cuda()
-    model.to(device)
+    model = model.cuda(device)
+    # model.to(device)
 
     if phase == 'train':
         # for debug

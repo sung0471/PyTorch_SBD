@@ -8,7 +8,7 @@ from lib.spatial_transforms import *
 
 from data.train_data_loader import DataSet as train_DataSet
 from data.test_data_loader import DataSet as test_DataSet
-from raw.cls import build_model
+from cls import build_model
 import time
 
 from lib.utils import AverageMeter, calculate_accuracy
@@ -36,7 +36,7 @@ def get_label(res_tensor):
     return labels
 
 
-def get_labels_from_candidate(video,temporal_length,model,spatial_transform,batch_size,device,boundary_index,**args):
+def get_labels_from_candidate(video, temporal_length, model, spatial_transform, batch_size, device, boundary_index, **args):
     print(boundary_index)
     clip_batch = []
     labels = []
@@ -69,7 +69,10 @@ def get_labels_from_candidate(video,temporal_length,model,spatial_transform,batc
 
         if len(clip_batch) == batch_size or i==(len(boundary_index)-1):
             clip_tensor = torch.stack(clip_batch, 0)
-            clip_tensor = Variable(clip_tensor)
+            # Alexnet
+            # clip_tensor = Variable(clip_tensor)
+            # resnet
+            clip_tensor = Variable(clip_tensor).cuda(device)
             results = model(clip_tensor)
             labels += get_label(results)
             clip_batch = []
@@ -79,7 +82,7 @@ def get_labels_from_candidate(video,temporal_length,model,spatial_transform,batc
     for i, label in enumerate(labels):
         range_of_frames = info_boundary[i]
         for j in range(range_of_frames[0],range_of_frames[1]):
-            res[j] = label if label==1 or res[j]==0 else res[j]
+            res[j] = label if label == 1 or res[j] == 0 else res[j]
 
     final_res = []
     i = 0
@@ -95,6 +98,19 @@ def get_labels_from_candidate(video,temporal_length,model,spatial_transform,batc
         else:
             i += 1
     return final_res
+
+
+def load_checkpoint(model, opt_model):
+    if opt_model=='alexnet':
+        path = 'models/Alexnet-final.pth'
+    elif opt_model=='resnet':
+        path = 'results/model_final.pth'
+    else:
+        print("[ERR] incorrect opt.model : ", opt_model)
+        assert False
+    print("load model... : ", opt_model)
+    checkpoint = torch.load(path)
+    model.load_state_dict(checkpoint['state_dict'])
 
 
 def test_misaeng():
@@ -128,9 +144,9 @@ def test_misaeng():
     print('[INFO] testing deepSBD')
     print("[INFO] test video : {}".format(video_name), flush=True)
 
-    model=build_model(opt, 'test', device)
+    model = build_model(opt, 'test', device)
     print(model)
-    load_checkpoint(model, 'results/model_final.pth')
+    load_checkpoint(model, opt.model)
     spatial_transforms = get_test_spatial_transform(opt)
     res = {}
 
@@ -183,26 +199,13 @@ def test_misaeng():
                 srt_index += 1
 
 
-def load_checkpoint(model, opt_model):
-    if opt_model=='alexnet':
-        path = 'results/Alexnet-final.pth'
-    elif opt_model=='resnet':
-        path = 'results/model_final.pth'
-    else:
-        print("[ERR] incorrect opt.model : ", opt_model)
-        assert False
-    print("load model... : ", opt_model)
-    checkpoint = torch.load(path)
-    model.load_state_dict(checkpoint['state_dict'])
-
-
 def test_dataset():
     opt = parse_opts()
 
     device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
     model = build_model(opt, "test", device)
     load_checkpoint(model, opt.model)
-    model.to(device)
+    model.cuda(device)
     model.eval()
 
     spatial_transform = get_test_spatial_transform(opt)
@@ -230,7 +233,7 @@ def test_dataset():
 
         labels = []
         for _, clip in enumerate(test_data_loader):
-            clip = Variable(clip).cuda().to(device)
+            clip = Variable(clip).cuda(device)
             results = model(clip)
             labels += get_label(results)
 
@@ -304,7 +307,7 @@ def train(cur_iter, total_iter, data_loader, model, criterion, optimizer, schedu
 
             # 19.3.8. revision
             if not opt.no_cuda:
-                targets = targets.to(device, non_blocking=True)
+                targets = targets.cuda(device, async=True)
 
             targets = Variable(targets)
             inputs = Variable(inputs)
@@ -401,7 +404,7 @@ def train_misaeng():
 
     # 19.3.8 revision
     if not opt.no_cuda:
-        criterion = criterion.to(device)
+        criterion = criterion.cuda(device)
 
     if not opt.no_train:
         spatial_transform = get_train_spatial_transform(opt)
@@ -433,6 +436,6 @@ def train_misaeng():
 
 
 if __name__ == '__main__':
-    train_misaeng()
-    # test_dataset()
+    # train_misaeng()
+    test_dataset()
     # test_misaeng()

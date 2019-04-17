@@ -2,10 +2,10 @@ import argparse
 
 def parse_opts():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--root_dir', default='data/ClipShots/Videos', required=False, type=str, help='Root directory path of data')
+    parser.add_argument('--root_dir', default='data/ClipShots/videos', required=False, type=str, help='Root directory path of data')
     parser.add_argument('--video_list_path', default='data/data_list/deepSBD.txt', type=str)
     parser.add_argument('--result_dir', default='results', type=str, help='Result directory path')
-    parser.add_argument('--total_iter', default=50,type=int)
+    parser.add_argument('--total_iter', default=100, type=int)
     parser.add_argument('--n_classes', default=3, type=int, help='Number of classes')
     parser.add_argument('--shuffle', default=True, help="shuffle the dataset")
     parser.add_argument('--sample_size', default=128, type=int, help='Height and width of inputs')
@@ -35,8 +35,8 @@ def parse_opts():
     parser.add_argument('--n_scales', default=5, type=int, help='Number of scales for multiscale cropping')
     parser.add_argument('--initial_scale', default=1.0, type=float, help='Initial scale for multiscale cropping')
     parser.add_argument('--scale_step', default=0.84089641525, type=float, help='Scale step for multiscale cropping')
-    parser.add_argument('--test_list_path', default='data/ClipShots/Video_lists/test.txt', type=str, help='test list path')
-    parser.add_argument('--gt_dir', default='data/ClipShots/Annotations/test.json', type=str,help='directory contains ground truth for test set')
+    parser.add_argument('--test_list_path', default='data/ClipShots/video_lists/test.txt', type=str, help='test list path')
+    parser.add_argument('--gt_dir', default='data/ClipShots/annotations/test.json', type=str,help='directory contains ground truth for test set')
     parser.add_argument('--auto_resume', action='store_true')
     parser.add_argument('--test_subdir',type=str,default='test',help='subdirectroy for training set')
     parser.add_argument('--train_subdir',type=str,default='train',help='subdirectory for testing set')

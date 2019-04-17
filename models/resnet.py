@@ -48,7 +48,7 @@ class BasicBlock(nn.Module):
         self.stride = stride
 
     def forward(self, x):
-        x = x.to(self.device)
+        x = x.cuda(self.device)
         residual = x
 
         out = self.conv1(x)
@@ -85,7 +85,7 @@ class Bottleneck(nn.Module):
         self.stride = stride
 
     def forward(self, x):
-        x = x.to(self.device)
+        x = x.cuda(self.device)
         residual = x
 
         out = self.conv1(x)
@@ -162,7 +162,7 @@ class ResNet(nn.Module):
         return nn.Sequential(*layers)
 
     def forward(self, x):
-        x = x.to(self.device)
+        x = x.cuda(self.device)
 
         x = self.conv1(x)
         x = self.bn1(x)
@@ -186,13 +186,13 @@ class ResNet(nn.Module):
         other, ext = os.path.splitext(base_file)
         if ext == '.pkl' or '.pth':
             print('Loading weights into state dict...')
-            pretrained=torch.load(base_file, map_location=lambda storage, loc: storage)['state_dict']
-            pretrained={"{}".format(s[7:]):v for s,v in pretrained.items()}
-            current_param=self.state_dict()
-            pretrained={k:v for k,v in pretrained.items() if k in current_param and k[:2]!='fc'}
+            pretrained = torch.load(base_file, map_location=lambda storage, loc: storage)['state_dict']
+            pretrained = {"{}".format(s[7:]):v for s,v in pretrained.items()}
+            current_param = self.state_dict()
+            pretrained = {k: v for k, v in pretrained.items() if k in current_param and k[:2] != 'fc'}
             current_param.update(pretrained)
             print(pretrained.keys())
-            #print(self.state_dict().keys())
+            # print(self.state_dict().keys())
             self.load_state_dict(current_param)
             print('Finished!')
         else:
