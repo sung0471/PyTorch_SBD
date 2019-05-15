@@ -4,11 +4,29 @@ from PIL import Image
 import os
 import math
 # import functools
-# import json
+import json
 # import copy
 # import numpy as np
 import random
 import cv2
+from lib.candidate_extracting import candidate_extraction
+from models.squeezenet import SqueezeNetFeature
+
+
+def no_candidate_frame_pos(root_dir, video_name, sample_duration):
+    video_dir = os.path.join(root_dir, video_name)
+
+    frame_index_list = []
+    # input video (cv2)
+    cap = cv2.VideoCapture(video_dir)
+    total_frame = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+    fps = int(cap.get(cv2.CAP_PROP_FPS))
+    i = 0
+    while i < total_frame:
+        frame_index_list.append(i)
+        i += sample_duration / 2
+
+    return frame_index_list, total_frame, fps
 
 
 def pil_loader(path):
@@ -42,28 +60,57 @@ def get_default_video_loader():
     return video_loader
 
 
-def make_dataset(video_path, sample_duration):
+def make_clip_list(video_root, video_name, sample_duration, no_candidate):
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     video_list=[]
-    cap = cv2.VideoCapture(video_path)
-    frame_num = 0
-    total_frame = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-    while frame_num < total_frame:
-        info = {"video_path": video_path, "begin": frame_num, "sample_duration": sample_duration}
-        video_list.append(info)
-        frame_num += sample_duration/2
+    if not no_candidate:
+        model = SqueezeNetFeature().to(device)
+        frame_index_list, total_frame, fps = candidate_extraction(video_root, video_name, model, adjacent=True)
+        frame_index_list = frame_index_list[1:-1]
+    else:
+        frame_index_list, total_frame, fps = no_candidate_frame_pos(video_root, video_name, sample_duration)
+        frame_index_list = frame_index_list[:]
 
-    return video_list
+    video_path = os.path.join(video_root, video_name)
+    for frame_pos in frame_index_list:
+        info = {"video_path": video_path, "frame_pos": frame_pos, "sample_duration": sample_duration}
+        video_list.append(info)
+
+    json_path = os.path.join(video_root, os.path.splitext(video_name)[0] + ".json")
+    json.dump(video_list, open(json_path, 'w'), indent=2)
+
+    return video_list, total_frame, fps
+
+
+def make_dataset(video_root, video_name_list, sample_duration, no_candidate):
+    if not isinstance(video_name_list, list):
+        video_list, total_frame, fps = make_clip_list(video_root, video_name_list, sample_duration, no_candidate)
+        return video_list, total_frame, fps
+    else:
+        video_all_list = []
+        video_length_list = []
+        video_fps_list = []
+        for video_name in video_name_list:
+            video_list, total_frame, fps = make_clip_list(video_root, video_name, sample_duration, no_candidate)
+            video_all_list += video_list
+            video_length_list += [total_frame]
+            video_fps_list += [fps]
+
+        return video_all_list, video_length_list, video_fps_list
 
 
 class DataSet(data.Dataset):
-    def __init__(self, video_path,
+    def __init__(self, video_root, video_name,
                  spatial_transform=None, temporal_transform=None, target_transform=None,
-                 sample_duration=16, get_loader=get_default_video_loader):
+                 sample_duration=16, no_candidate=True,
+                 get_loader=get_default_video_loader):
         # torch.set_default_tensor_type('torch.cuda.FloatTensor')
-        self.video_list = make_dataset(video_path, sample_duration)
+        self.video_list, self.total_frame, self.fps = make_dataset(
+            video_root, video_name, sample_duration, no_candidate)
         self.spatial_transform = spatial_transform
         self.temporal_transform = temporal_transform
         self.target_transform = target_transform
+        self.no_candidate = no_candidate
         self.loader = get_loader()
 
     def __getitem__(self, index):
@@ -75,17 +122,26 @@ class DataSet(data.Dataset):
         """
 
         video_path = self.video_list[index]['video_path']
-        begin_indicate = self.video_list[index]['begin']
+        frame_pos = self.video_list[index]['frame_pos']
         sample_duration = self.video_list[index]['sample_duration']
 
-        clip = self.loader(video_path, begin_indicate, sample_duration)
+        if not self.no_candidate:
+            start_frame = int(frame_pos - (sample_duration / 2 - 1))
+            start_frame = 0 if start_frame < 0 else start_frame
+        else:
+            start_frame = frame_pos
+
+        clip = self.loader(video_path, start_frame, sample_duration)
         # raw_clip=clip
 
         if self.spatial_transform is not None:
             clip = [self.spatial_transform(img) for img in clip]
         clip = torch.stack(clip, 0).permute(1, 0, 2, 3)
 
-        return clip
+        return clip, start_frame
 
     def __len__(self):
         return len(self.video_list)
+
+    def get_video_attr(self):
+        return self.total_frame, self.fps

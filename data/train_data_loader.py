@@ -45,10 +45,9 @@ def get_default_video_loader():
     return video_loader
 
 
-def make_dataset(root_path, video_list_path, sample_duration):
+def make_dataset(root_path, video_list_path, sample_duration, opt):
     video_list=[]
     info={}
-    use_small_dataset = False
     with open(video_list_path, 'r') as f:
         for line in f.readlines():
             words = line.split(' ')
@@ -56,8 +55,9 @@ def make_dataset(root_path, video_list_path, sample_duration):
 
             # 19.3.21. add
             # using small dataset
-            if use_small_dataset:
-                if not(words[0][0] == '~' or words[0][0] == '-'):
+            if not opt.is_full_data:
+                case = ['2']
+                if not(words[0][0] in case):
                     continue
 
             for i in range(2):
@@ -85,10 +85,11 @@ def make_dataset(root_path, video_list_path, sample_duration):
 
 
 class DataSet(data.Dataset):
-    def __init__(self, root_path, video_list_path,
+    def __init__(self, root_path, video_list_path, opt,
                  spatial_transform=None, temporal_transform=None, target_transform=None,
                  sample_duration=16, get_loader=get_default_video_loader):
-        self.video_list = make_dataset(root_path, video_list_path, sample_duration)
+        self.video_list = make_dataset(root_path, video_list_path, sample_duration, opt)
+        print("[INFO] training policy : ", 'full' if opt.is_full_data else 'no_full')
         print("[INFO] training dataset length : ", len(self.video_list))
         self.spatial_transform = spatial_transform
         self.temporal_transform = temporal_transform
