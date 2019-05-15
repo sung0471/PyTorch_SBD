@@ -64,7 +64,7 @@ def make_clip_list(video_root, video_name, sample_duration, no_candidate):
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     video_list=[]
     if not no_candidate:
-        model = SqueezeNetFeature().to(device)
+        model = SqueezeNetFeature()
         frame_index_list, total_frame, fps = candidate_extraction(video_root, video_name, model, adjacent=True)
         frame_index_list = frame_index_list[1:-1]
     else:
