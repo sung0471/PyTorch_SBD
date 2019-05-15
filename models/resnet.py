@@ -8,6 +8,8 @@ import os
 
 __all__ = ['ResNet', 'resnet10', 'resnet18', 'resnet34', 'resnet50', 'resnet101', 'resnet152', 'resnet200']
 
+# 19.5.7. add
+device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 def conv3x3x3(in_planes, out_planes, stride=1):
     # 3x3x3 convolution with padding
@@ -17,7 +19,7 @@ def conv3x3x3(in_planes, out_planes, stride=1):
 
 def downsample_basic_block(x, planes, stride):
     # 19.3.21 add
-    device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
+    # device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 
     out = F.avg_pool3d(x, kernel_size=1, stride=stride)
     zero_pads = torch.Tensor(out.size(0), planes - out.size(1),
@@ -34,7 +36,6 @@ def downsample_basic_block(x, planes, stride):
 
 
 class BasicBlock(nn.Module):
-    device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
     expansion = 1
 
     def __init__(self, inplanes, planes, stride=1, downsample=None):
@@ -48,7 +49,6 @@ class BasicBlock(nn.Module):
         self.stride = stride
 
     def forward(self, x):
-        x = x.cuda(self.device)
         residual = x
 
         out = self.conv1(x)
@@ -68,7 +68,6 @@ class BasicBlock(nn.Module):
 
 
 class Bottleneck(nn.Module):
-    device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
     expansion = 4
 
     def __init__(self, inplanes, planes, stride=1, downsample=None):
@@ -85,7 +84,6 @@ class Bottleneck(nn.Module):
         self.stride = stride
 
     def forward(self, x):
-        x = x.cuda(self.device)
         residual = x
 
         out = self.conv1(x)
@@ -109,8 +107,6 @@ class Bottleneck(nn.Module):
 
 
 class ResNet(nn.Module):
-    device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
-
     def __init__(self, block, layers, sample_size, sample_duration, shortcut_type='B', num_classes=400):
         self.inplanes = 64
         super(ResNet, self).__init__()
@@ -161,8 +157,24 @@ class ResNet(nn.Module):
 
         return nn.Sequential(*layers)
 
+    def multibox(self, resnet, shortcut_type='B', num_classes=3):
+        loc_layers = []
+        conf_layers = []
+        number_channel = [64, 128, 256, 512, 512]
+        pooling_size = [32, 16, 8, 4, 1]
+        box_number = [16, 8, 4, 2, 1]
+        box_length = [2, 4, 8, 16, 32]
+        box_center = []
+        for i in range(5):
+            self.inplanes = number_channel[i]
+            loc_layers += self._make_layer(BasicBlock, 2, 1, shortcut_type, stride=1)
+            loc_layers += nn.AvgPool3d((1, pooling_size[i], pooling_size[i]), stride=1)
+            conf_layers += self._make_layer(BasicBlock, num_classes, 1, shortcut_type, stride=1)
+            conf_layers += nn.AvgPool3d((1, pooling_size[i], pooling_size[i]), stride=1)
+
     def forward(self, x):
-        x = x.cuda(self.device)
+        # x = x.cuda()
+        # x = x.to(device)
 
         x = self.conv1(x)
         x = self.bn1(x)
@@ -220,6 +232,7 @@ def get_fine_tuning_parameters(model, ft_begin_index):
     return parameters
 
 
+
 def resnet10(**kwargs):
     """Constructs a ResNet-18 model.
     """
@@ -261,3 +274,9 @@ def resnet200(**kwargs):
     """
     model = ResNet(Bottleneck, [3, 24, 36, 3], **kwargs)
     return model
+
+
+if __name__ == '__main__':
+    net = resnet18(num_classes=3, sample_size=128, sample_duration=32)
+    print(net)
+    print("net length : ", len(list(net.children())))
