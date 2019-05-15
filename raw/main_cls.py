@@ -14,8 +14,10 @@ from torch.autograd import Variable
 from torch.optim import lr_scheduler
 from raw.test_cls import test
 
+
 def get_mean(norm_value=255):
     return [114.7748 / norm_value, 107.7354 / norm_value, 99.4750 / norm_value]
+
 
 def calculate_accuracy(outputs, targets):
     batch_size = targets.size(0)
@@ -26,7 +28,8 @@ def calculate_accuracy(outputs, targets):
     n_correct_elems = correct.float().sum().data
 
     return n_correct_elems / batch_size
-    
+
+
 # 19.3.8 revision
 # add parameter : "device"
 def train(cur_iter, total_iter,data_loader, model, criterion, optimizer,scheduler, opt, device):
@@ -97,6 +100,7 @@ def train(cur_iter, total_iter,data_loader, model, criterion, optimizer,schedule
     }
     torch.save(states, save_file_path)
 
+
 def get_lastest_model(opt):
     if opt.resume_path!='':
         return 0
@@ -112,6 +116,7 @@ def get_lastest_model(opt):
     if iter_num>0:
         opt.resume_path=os.path.join(opt.result_dir,'model_iter{}.pth'.format(iter_num))
     return iter_num
+
 
 if __name__ == '__main__':
     opt = parse_opts()

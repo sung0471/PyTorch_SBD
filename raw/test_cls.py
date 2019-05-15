@@ -8,7 +8,7 @@ import os,cv2
 from PIL import Image
 
 from torch.autograd import Variable
-from raw import eval_res
+import eval_res
 
 
 def get_label(res_tensor):
@@ -17,6 +17,7 @@ def get_label(res_tensor):
     for row in res_numpy:
         labels.append(np.argmax(row))
     return labels
+
 
 def deepSBD(video_path,temporal_length,model,spatial_transform,batch_size,device,**args):
     assert(os.path.exists(video_path))
@@ -44,6 +45,7 @@ def deepSBD(video_path,temporal_length,model,spatial_transform,batch_size,device
 
         if len(clip_batch)==batch_size or not status:
             clip_tensor=torch.stack(clip_batch, 0)
+            clip_tensor=clip_tensor.cuda(device, non_blocking=True)
             clip_tensor=Variable(clip_tensor)
             results=model(clip_tensor)
             labels+=get_label(results)
@@ -64,13 +66,16 @@ def deepSBD(video_path,temporal_length,model,spatial_transform,batch_size,device
             i+=1
     return final_res
 
+
 def load_video_list(path):
     with open(path,'r') as f:
         return [line.strip('\n') for line in f.readlines()]
 
+
 def load_checkpoint(model,path):
     checkpoint = torch.load(path)
     model.load_state_dict(checkpoint['state_dict'])
+
 
 def get_result(opt,model,device):
     spatial_transforms=get_test_spatial_transform(opt)
@@ -98,13 +103,15 @@ def test(opt,model,device):
     
     eval_res.eval(out_path, opt.gt_dir)
 
+
 def main(opt):
     # `19.3.21. add (device)
-    device=torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
-    model = build_model(opt, "test")
+    device=torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    model = build_model(opt, "test", device)
     load_checkpoint(model, opt.weights)
     model.eval()
     test(opt,model,device)
+
 
 if __name__ == '__main__':
     opt = parse_test_args()
