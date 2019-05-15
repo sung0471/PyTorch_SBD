@@ -60,6 +60,7 @@ def candidate_extraction(root_dir, video_file, model, adjacent=True):
             frame = np.array(im)
 
             frame_tensor = torch.from_numpy(frame).transpose(0, 1).transpose(0, 2).unsqueeze(0).float()
+            frame_tensor = frame_tensor.cuda(device, non_blocking=True)
             frame_feature_tensor = model(frame_tensor).cpu()
             frame_feature_np = frame_feature_tensor.squeeze(0).data.numpy()
             frame_feature_arr[i] = frame_feature_np
