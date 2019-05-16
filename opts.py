@@ -33,7 +33,7 @@ def parse_opts():
     parser.set_defaults(test=False)
     parser.add_argument('--no_cuda', action='store_true', help='If true, cuda is not used.')
     parser.set_defaults(no_cuda=False)
-    parser.add_argument('--n_threads', default=2, type=int, help='Number of threads for multi-thread loading')
+    parser.add_argument('--n_threads', default=1, type=int, help='Number of threads for multi-thread loading')
     parser.add_argument('--norm_value', default=1, type=int, help='If 1, range of inputs is [0-255]. If 255, range of inputs is [0-1].')
     parser.add_argument('--model', default='resnext', type=str, help='(resnet | alexnet | resnext)')
     parser.add_argument('--gpu_num',type=int,default=1)
