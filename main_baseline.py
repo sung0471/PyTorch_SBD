@@ -229,17 +229,16 @@ def load_pickle(labels_path, frame_pos_path):
     return labels, frame_pos
 
 
-def test_misaeng(device):
-    opt = parse_opts()
+def test_misaeng(opt, device, model):
+    # opt = parse_opts()
 
-    if not opt.no_multiloss:
-        teacher_model_path = 'models/Alexnet-final.pth'
-        model = teacher_student_net(opt, teacher_model_path, 'test')
-        print(model)
-    else:
-        model = build_model(opt, 'test')
+    # if not opt.no_multiloss:
+    #     teacher_model_path = 'models/Alexnet-final.pth'
+    #     model = teacher_student_net(opt, teacher_model_path, 'test', device)
+    # else:
+    #     model = build_model(opt, 'test', device)
     load_checkpoint(model, opt.model)
-    model.eval()
+    # model.eval()
 
     spatial_transform = get_test_spatial_transform(opt)
     temporal_transform = None
@@ -342,17 +341,16 @@ def test_misaeng(device):
         json.dump(res, open(out_path, 'w'))
 
 
-def test_dataset(device):
-    opt = parse_opts()
+def test_dataset(opt, device, model):
+    # opt = parse_opts()
 
-    if not opt.no_multiloss:
-        teacher_model_path = 'models/Alexnet-final.pth'
-        model = teacher_student_net(opt, teacher_model_path, 'test')
-        print(model)
-    else:
-        model = build_model(opt, 'test')
+    # if not opt.no_multiloss:
+    #     teacher_model_path = 'models/Alexnet-final.pth'
+    #     model = teacher_student_net(opt, teacher_model_path, 'test', device)
+    # else:
+    #     model = build_model(opt, 'test', device)
     load_checkpoint(model, opt.model)
-    model.eval()
+    # model.eval()
 
     spatial_transform = get_test_spatial_transform(opt)
     temporal_transform = None
@@ -495,7 +493,7 @@ def train(cur_iter, iter_per_epoch, epoch, data_loader, model, criterion, optimi
 
             if i % 10 == 0:
                 batch_time = time.time() - start_time
-                print('Iter:{} Loss_conf:{} acc:{:.6f} lr:{} batch_time:{:.3f}s'.format(
+                print('Iter:{} Loss_conf:{} epoch_acc:{:.6f} lr:{} batch_time:{:.3f}s'.format(
                     i, loss.data, epoch_acc, optimizer.param_groups[0]['lr'], batch_time), flush=True)
                 start_time = time.time()
 
@@ -546,8 +544,8 @@ def get_lastest_model(opt):
     return iter_num
 
 
-def train_misaeng(device):
-    opt = parse_opts()
+def train_misaeng(opt, device, model):
+    # opt = parse_opts()
 
     opt.scales = [opt.initial_scale]
     for i in range(1, opt.n_scales):
@@ -558,39 +556,40 @@ def train_misaeng(device):
 
     torch.manual_seed(opt.manual_seed)
 
-    # 19.3.8. add
-    print("cuda is available : ", torch.cuda.is_available(), flush=True)
+    # # 19.3.8. add
+    # print("cuda is available : ", torch.cuda.is_available(), flush=True)
 
-    # 19.5.16 add
-    # set default tensor type
-    if torch.cuda.is_available() and not opt.no_cuda:
-        torch.set_default_tensor_type('torch.cuda.FloatTensor')
-    else:
-        torch.set_default_tensor_type('torch.FloatTensor')
+    # # 19.5.16 add
+    # # set default tensor type
+    # if torch.cuda.is_available() and not opt.no_cuda:
+    #     torch.backends.benchmark = True
+    #     torch.set_default_tensor_type('torch.cuda.FloatTensor')
+    # else:
+    #     torch.set_default_tensor_type('torch.FloatTensor')
 
     # 19.5.15. add
     print('[INFO] training {}'.format(opt.model), flush=True)
 
-    # 19.5.7. add
-    # teacher student option add
-    if not opt.no_multiloss:
-        teacher_model_path = 'models/Alexnet-final.pth'
-        model = teacher_student_net(opt, teacher_model_path, 'train')
-    else:
-        model = build_model(opt, 'train')
-    print(model)
+    # # 19.5.7. add
+    # # teacher student option add
+    # if not opt.no_multiloss:
+    #     teacher_model_path = 'models/Alexnet-final.pth'
+    #     model = teacher_student_net(opt, teacher_model_path, 'train', device)
+    # else:
+    #     model = build_model(opt, 'train', device)
+    # print(model)
 
-    # `19.5.14.
-    # use multi_gpu for training and testing
-    model = nn.DataParallel(model, device_ids=range(opt.gpu_num))
-
-    # `19.5.16. : from cls.py to main_baseline.py
-    # `19.3.8
-    # model = model.cuda(device)
-    if not opt.no_cuda:
-        torch.backends.benchmark = True
-        model = model.to(device)
-        # model.cuda()
+    # # `19.5.14.
+    # # use multi_gpu for training and testing
+    # model = nn.DataParallel(model, device_ids=range(opt.gpu_num))
+    #
+    # # `19.5.16. : from cls.py to main_baseline.py
+    # # `19.3.8
+    # # model = model.cuda(device)
+    # if not opt.no_cuda:
+    #     torch.backends.benchmark = True
+    #     model = model.to(device)
+    #     # model.cuda()
 
     parameters = model.parameters()
 
@@ -652,10 +651,47 @@ def train_misaeng(device):
         train(cur_iter, opt.iter_per_epoch, opt.epoch, training_data_loader, model, criterion, optimizer, scheduler, opt, device)
 
 
-if __name__ == '__main__':
+def main():
     # 19.5.7 add
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-    train_misaeng(device)
+    opt = parse_opts()
+
+    # 19.3.8. add
+    print("cuda is available : ", torch.cuda.is_available(), flush=True)
+
+    # 19.5.16 add
+    # set default tensor type
+    if torch.cuda.is_available() and not opt.no_cuda:
+        torch.backends.benchmark = True
+        torch.set_default_tensor_type('torch.cuda.FloatTensor')
+    else:
+        torch.set_default_tensor_type('torch.FloatTensor')
+
+    assert opt.phase in ['train', 'test']
+    # 19.5.7. add
+    # teacher student option add
+    if not opt.no_multiloss:
+        teacher_model_path = 'models/Alexnet-final.pth'
+        model = teacher_student_net(opt, teacher_model_path, device)
+    else:
+        model = build_model(opt, opt.phase, device)
+    print(model)
+
+    if opt.phase == 'train':
+        train_misaeng(opt, device, model)
+    else:
+        if opt.misaeng:
+            test_misaeng(opt, device, model)
+        else:
+            test_dataset(opt, device, model)
+
+
+if __name__ == '__main__':
+    # # 19.5.7 add
+    # device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+
+    main()
+    # train_misaeng(device)
     # test_dataset(device)
     # test_misaeng(device)
