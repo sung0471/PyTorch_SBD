@@ -27,7 +27,7 @@ def build_model(opt, phase, device):
     # model = model.cuda(device)
     if not opt.no_cuda:
         # torch.backends.benchmark = True
-        model.to(device)
+        model = model.to(device)
         # model.cuda()
 
     # `19.5.14.
