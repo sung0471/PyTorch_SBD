@@ -5,18 +5,18 @@ import os
 
 
 class teacher_student_net(nn.Module):
-    def __init__(self, opt, teacher_model_path, phase):
-        self.phase = phase
+    def __init__(self, opt, teacher_model_path, device):
+        self.phase = opt.phase
         # self.device = device
         super(teacher_student_net, self).__init__()
 
         opt.model = 'alexnet'
-        self.teacher_model = build_model(opt, 'test')
+        self.teacher_model = build_model(opt, 'test', device)
         self.teacher_model_path = teacher_model_path
         self.load_checkpoint(self.teacher_model, self.teacher_model_path)
 
         opt.model = 'resnext'
-        self.student_model = build_model(opt, 'train')
+        self.student_model = build_model(opt, self.phase, device)
 
     def forward(self, x):
         # x = x.to(self.device)
@@ -41,5 +41,5 @@ if __name__ == '__main__':
     opt.pretrain_path = '../kinetics_pretrained_model/resnext-101-kinetics.pth'
     teacher_model_path = 'Alexnet-final.pth'
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    model = teacher_student_net(opt, teacher_model_path, 'train')
+    model = teacher_student_net(opt, teacher_model_path, device)
     print(model)
