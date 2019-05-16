@@ -234,10 +234,10 @@ def test_misaeng(device):
 
     if not opt.no_multiloss:
         teacher_model_path = 'models/Alexnet-final.pth'
-        model = teacher_student_net(opt, teacher_model_path, 'test', device)
+        model = teacher_student_net(opt, teacher_model_path, 'test')
         print(model)
     else:
-        model = build_model(opt, 'test', device)
+        model = build_model(opt, 'test')
     load_checkpoint(model, opt.model)
     model.eval()
 
@@ -347,10 +347,10 @@ def test_dataset(device):
 
     if not opt.no_multiloss:
         teacher_model_path = 'models/Alexnet-final.pth'
-        model = teacher_student_net(opt, teacher_model_path, 'test', device)
+        model = teacher_student_net(opt, teacher_model_path, 'test')
         print(model)
     else:
-        model = build_model(opt, 'test', device)
+        model = build_model(opt, 'test')
     load_checkpoint(model, opt.model)
     model.eval()
 
@@ -451,15 +451,17 @@ def train(cur_iter, iter_per_epoch, epoch, data_loader, model, criterion, optimi
 
     total_iter = epoch * iter_per_epoch
     save_timing = int(iter_per_epoch / 5)
-    if save_timing < 2000:
-        save_timing = 2000
-    elif save_timing > 5000:
-        save_timing = 5000
+    if opt.use_save_timing:
+        if save_timing < 2000:
+            save_timing = 2000
+        elif save_timing > 5000:
+            save_timing = 5000
     epoch_time = time.time()
+
     print('\n====> Training Start', flush=True)
     while i < total_iter:
+        start_time = time.time()
         for _, (inputs, targets) in enumerate(data_loader):
-            start_time = time.time()
 
             # 19.3.7 add
             # if not opt.no_cuda:
@@ -489,11 +491,13 @@ def train(cur_iter, iter_per_epoch, epoch, data_loader, model, criterion, optimi
             optimizer.step()
             scheduler.step(loss.data)
 
-            batch_time = time.time() - start_time
-
-            print('Iter:{} Loss_conf:{} acc:{} lr:{} batch_time:{:.3f}s'.format(
-                i + 1, loss.data, acc, optimizer.param_groups[0]['lr'], batch_time), flush=True)
             i += 1
+
+            if i % 10 == 0:
+                batch_time = time.time() - start_time
+                print('Iter:{} Loss_conf:{} acc:{:.6f} lr:{} batch_time:{:.3f}s'.format(
+                    i, loss.data, epoch_acc, optimizer.param_groups[0]['lr'], batch_time), flush=True)
+                start_time = time.time()
 
             if i % save_timing == 0:
                 save_file_path = os.path.join(opt.result_dir, 'model_iter{}.pth'.format(i))
@@ -504,7 +508,7 @@ def train(cur_iter, iter_per_epoch, epoch, data_loader, model, criterion, optimi
                 }
                 torch.save(states, save_file_path)
             if i % iter_per_epoch == 0 and i != 0:
-                print("epoch {} accuracy : {}".format(i / iter_per_epoch, epoch_acc))
+                print("epoch {} accuracy : {}".format(i / iter_per_epoch, epoch_acc), flush=True)
                 total_acc[int(i / iter_per_epoch)-1] = epoch_acc
                 epoch_acc = 0.0
             if i >= total_iter:
@@ -556,34 +560,39 @@ def train_misaeng(device):
 
     # 19.3.8. add
     print("cuda is available : ", torch.cuda.is_available(), flush=True)
+
+    # 19.5.16 add
+    # set default tensor type
+    if torch.cuda.is_available() and not opt.no_cuda:
+        torch.set_default_tensor_type('torch.cuda.FloatTensor')
+    else:
+        torch.set_default_tensor_type('torch.FloatTensor')
+
+    # 19.5.15. add
     print('[INFO] training {}'.format(opt.model), flush=True)
 
     # 19.5.7. add
     # teacher student option add
     if not opt.no_multiloss:
         teacher_model_path = 'models/Alexnet-final.pth'
-        model = teacher_student_net(opt, teacher_model_path, 'train', device)
-        print(model)
+        model = teacher_student_net(opt, teacher_model_path, 'train')
     else:
-        model = build_model(opt, 'train', device)
-        model.train()
+        model = build_model(opt, 'train')
+    print(model)
 
-    cur_iter = 0
-    if opt.auto_resume and opt.resume_path == '':
-        cur_iter = get_lastest_model(opt)
-    if opt.resume_path:
-        print('loading checkpoint {}'.format(opt.resume_path), flush=True)
-        checkpoint = torch.load(opt.resume_path)
-        model.load_state_dict(checkpoint['state_dict'])
+    # `19.5.14.
+    # use multi_gpu for training and testing
+    model = nn.DataParallel(model, device_ids=range(opt.gpu_num))
+
+    # `19.5.16. : from cls.py to main_baseline.py
+    # `19.3.8
+    # model = model.cuda(device)
+    if not opt.no_cuda:
+        torch.backends.benchmark = True
+        model = model.to(device)
+        # model.cuda()
 
     parameters = model.parameters()
-
-    # 19.5.7. add
-    # teacher student option add
-    if not opt.no_multiloss:
-        criterion = multiloss()
-    else:
-        criterion = nn.CrossEntropyLoss()
 
     if opt.nesterov:
         dampening = 0
@@ -593,6 +602,22 @@ def train_misaeng(device):
     optimizer = optim.SGD(parameters, lr=opt.learning_rate,
                           momentum=opt.momentum, dampening=dampening,
                           weight_decay=opt.weight_decay, nesterov=opt.nesterov)
+
+    cur_iter = 0
+    if opt.auto_resume and opt.resume_path == '':
+        cur_iter = get_lastest_model(opt)
+    if opt.resume_path:
+        print('loading checkpoint {}'.format(opt.resume_path), flush=True)
+        checkpoint = torch.load(opt.resume_path)
+        model.load_state_dict(checkpoint['state_dict'])
+        optimizer.load_state_dict(checkpoint['optimizer'])
+
+    # 19.5.7. add
+    # teacher student option add
+    if not opt.no_multiloss:
+        criterion = multiloss()
+    else:
+        criterion = nn.CrossEntropyLoss()
 
     # 19.3.8 revision
     if not opt.no_cuda:
