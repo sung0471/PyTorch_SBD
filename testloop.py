@@ -205,3 +205,8 @@ for video_name in video_name_list:
     length_of_test += total_frame
 
 print("misaeng length frame : {}".format(length_of_test))
+
+arr_test = torch.Tensor([[1,2,3,4],[9,10,11,12],[5,6,7,8]])
+_, predict = arr_test.topk(1,1,True)
+predict = predict.t()
+print(predict, type(predict), predict.size())
