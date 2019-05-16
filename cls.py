@@ -6,7 +6,7 @@ from models import generate_model
 import os
 
 
-def build_model(opt, phase):
+def build_model(opt, phase, device):
     if phase != "test" and phase != "train":
         print("Error: Phase not recognized")
         return
@@ -23,13 +23,16 @@ def build_model(opt, phase):
     else:
         print("no pretrained model")
 
-    # # `19.3.8
-    # # model = model.cuda(device)
-    # if not opt.no_cuda:
-    #     torch.backends.benchmark = True
-    #     model.to(device)
-    #     # model.cuda()
+    # `19.3.8
+    # model = model.cuda(device)
+    if not opt.no_cuda:
+        # torch.backends.benchmark = True
+        model.to(device)
+        # model.cuda()
 
+    # `19.5.14.
+    # use multi_gpu for training and testing
+    model = nn.DataParallel(model, device_ids=range(opt.gpu_num))
     if phase == 'train':
         # for debug
         # print(opt.gpu_num)
