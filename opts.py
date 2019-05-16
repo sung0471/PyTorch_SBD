@@ -10,6 +10,7 @@ def parse_opts():
     parser.add_argument('--is_full_data', default=True, help='explain whether full data or not')
     parser.add_argument('--iter_per_epoch', default=31250, type=int)
     parser.add_argument('--epoch', default=5, type=int)
+    parser.add_argument('--use_save_timing', default=False, help='if True, adjust save timing from 2000 to 5000. else, iter_per_epoch / 5')
     parser.add_argument('--n_classes', default=3, type=int, help='Number of classes')
     parser.add_argument('--shuffle', default=True, help="shuffle the dataset")
     parser.add_argument('--sample_size', default=128, type=int, help='Height and width of inputs')
