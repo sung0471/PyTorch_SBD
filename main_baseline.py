@@ -611,6 +611,9 @@ def train_misaeng(opt, device, model):
         model.load_state_dict(checkpoint['state_dict'])
         optimizer.load_state_dict(checkpoint['optimizer'])
 
+    if opt.start_iter != 0:
+        cur_iter = opt.start_iter
+
     # 19.5.7. add
     # teacher student option add
     if not opt.no_multiloss:
