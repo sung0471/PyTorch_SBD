@@ -1,3 +1,5 @@
+#-*- coding: utf-8 -*-
+
 import os
 import json
 from torch import nn
@@ -178,10 +180,9 @@ def test(test_data_loader, model, device):
     labels = []
     frame_pos = []
 
-    for _, (clip, boundary) in enumerate(test_data_loader):
-        batch_time = time.time()
-        print("batch {}".format(_ + 1), end=' ', flush=True)
-
+    batch_time = time.time()
+    total_iter = len(test_data_loader)
+    for i, (clip, boundary) in enumerate(test_data_loader):
         # clip = clip.to(device)
         clip = clip.cuda(device, non_blocking=True)
         clip = Variable(clip, requires_grad=False)
@@ -195,8 +196,10 @@ def test(test_data_loader, model, device):
         for _ in boundary:
             frame_pos.append(int(_+1))
 
-        end_time = time.time() - batch_time
-        print(" : {}".format(end_time), flush=True)
+        if (i+1) % 10 == 0 or i+1 == total_iter:
+            end_time = time.time() - batch_time
+            print("iter {}/{} : {}".format(i + 1, total_iter, end_time), flush=True)
+            batch_time = time.time()
 
     return labels, frame_pos
 
@@ -251,6 +254,13 @@ def test_misaeng(opt, device, model):
     with open(misaeng_list_path, 'r') as f:
         video_name_list = [line.strip('\n') for line in f.readlines()]
 
+    is_full_data = '.full' if opt.is_full_data else '.no_full'
+    dir = 'KD' if not opt.no_multiloss else opt.model
+    epoch = 'epoch_' + str(opt.epoch)
+    pickle_dir = os.path.join(root_dir, dir, epoch)
+    if not os.path.exists(pickle_dir):
+        os.mkdir(pickle_dir)
+
     res = {}
     # print('\n====> Testing Start', flush=True)
     epoch_time = time.time()
@@ -271,10 +281,8 @@ def test_misaeng(opt, device, model):
 
         # 이미 처리한 결과가 있다면 pickle 로드
         print("Process {}".format(idx + 1), flush=True)
-        is_full_data = '.full' if True else '.no_full'
-        dir = 'teacher' if not opt.no_multiloss else opt.model
-        labels_path = os.path.join(root_dir, dir, video_name + is_full_data + '.labels')
-        frame_pos_path = os.path.join(root_dir, dir, video_name + is_full_data + '.frame_pos')
+        labels_path = os.path.join(pickle_dir, video_name + is_full_data + '.labels')
+        frame_pos_path = os.path.join(pickle_dir, video_name + is_full_data + '.frame_pos')
         if not os.path.exists(labels_path) and not os.path.exists(frame_pos_path):
             labels, frame_pos = test(test_data_loader, model, device)
             save_pickle(labels_path, frame_pos_path, labels, frame_pos)
@@ -363,6 +371,13 @@ def test_dataset(opt, device, model):
     with open(opt.test_list_path, 'r') as f:
         video_name_list = [line.strip('\n') for line in f.readlines()]
 
+    is_full_data = '.full' if opt.is_full_data else '.no_full'
+    dir = 'KD' if not opt.no_multiloss else opt.model
+    epoch = 'epoch_' + str(opt.epoch)
+    pickle_dir = os.path.join(root_dir, dir, epoch)
+    if not os.path.exists(pickle_dir):
+        os.mkdir(pickle_dir)
+
     res = {}
     # print('\n====> Testing Start', flush=True)
     epoch_time = time.time()
@@ -377,10 +392,8 @@ def test_dataset(opt, device, model):
                                  no_candidate=opt.no_candidate)
         test_data_loader = torch.utils.data.DataLoader(test_data, batch_size=opt.batch_size,
                                                        num_workers=opt.n_threads, pin_memory=True)
-        is_full_data = '.full' if opt.is_full_data else '.no_full'
-        dir = 'KD' if not opt.no_multiloss else opt.model
-        labels_path = os.path.join(root_dir, dir, video_name + is_full_data + '.labels')
-        frame_pos_path = os.path.join(root_dir, dir, video_name + is_full_data + '.frame_pos')
+        labels_path = os.path.join(pickle_dir, video_name + is_full_data + '.labels')
+        frame_pos_path = os.path.join(pickle_dir, video_name + is_full_data + '.frame_pos')
         if not os.path.exists(labels_path) and not os.path.exists(frame_pos_path):
             labels, frame_pos = test(test_data_loader, model, device)
             save_pickle(labels_path, frame_pos_path, labels, frame_pos)
@@ -507,7 +520,7 @@ def train(cur_iter, iter_per_epoch, epoch, data_loader, model, criterion, optimi
                 torch.save(states, save_file_path)
             if i % iter_per_epoch == 0 and i != 0:
                 print("epoch {} accuracy : {}".format(i / iter_per_epoch, epoch_acc), flush=True)
-                total_acc[int(i / iter_per_epoch)-1] = epoch_acc
+                total_acc[int(i / iter_per_epoch)-1] = float(epoch_acc)
                 epoch_acc = 0.0
             if i >= total_iter:
                 break
@@ -654,7 +667,35 @@ def train_misaeng(opt, device, model):
         train(cur_iter, opt.iter_per_epoch, opt.epoch, training_data_loader, model, criterion, optimizer, scheduler, opt, device)
 
 
+def build_final_model(opt, device):
+    assert opt.phase in ['train', 'test']
+    assert opt.model_type in ['old', 'new']
+
+    # 19.5.7. add
+    # teacher student option add
+    if not opt.no_multiloss:
+        teacher_model_path = 'models/Alexnet-final.pth'
+        model = teacher_student_net(opt, teacher_model_path, device)
+    else:
+        model = build_model(opt, opt.phase, device)
+
+    if not opt.no_cuda and opt.model_type == 'new':
+        # model = model.cuda(device)
+        # use multi_gpu for training and testing
+        model = nn.DataParallel(model, device_ids=range(opt.gpu_num))
+        model = model.to(device)
+        # model.cuda()
+
+    print(model)
+
+    return model
+
+
 def main():
+    # 19.5.17 for ubuntu
+    # torch.multiprocessing.set_start_method("spawn")
+    # print(torch.__version__)
+
     # 19.5.7 add
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
@@ -671,15 +712,18 @@ def main():
     else:
         torch.set_default_tensor_type('torch.FloatTensor')
 
-    assert opt.phase in ['train', 'test']
-    # 19.5.7. add
-    # teacher student option add
-    if not opt.no_multiloss:
-        teacher_model_path = 'models/Alexnet-final.pth'
-        model = teacher_student_net(opt, teacher_model_path, device)
-    else:
-        model = build_model(opt, opt.phase, device)
-    print(model)
+    # assert opt.phase in ['train', 'test']
+    # # 19.5.7. add
+    # # teacher student option add
+    # if not opt.no_multiloss:
+    #     teacher_model_path = 'models/Alexnet-final.pth'
+    #     model = teacher_student_net(opt, teacher_model_path, device)
+    # else:
+    #     model = build_model(opt, opt.phase, device)
+    # print(model)
+    
+    # 위의 라인을 하나의 함수로 통합
+    model = build_final_model(opt, device)
 
     if opt.phase == 'train':
         train_misaeng(opt, device, model)
