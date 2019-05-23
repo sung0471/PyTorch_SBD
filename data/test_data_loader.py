@@ -60,10 +60,10 @@ def get_default_video_loader():
     return video_loader
 
 
-def make_clip_list(video_root, video_name, sample_duration, no_candidate):
+def make_clip_list(video_root, video_name, sample_duration, candidate):
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     video_list=[]
-    if not no_candidate:
+    if candidate:
         model = SqueezeNetFeature()
         frame_index_list, total_frame, fps = candidate_extraction(video_root, video_name, model, adjacent=True)
         frame_index_list = frame_index_list[1:-1]
@@ -82,16 +82,16 @@ def make_clip_list(video_root, video_name, sample_duration, no_candidate):
     return video_list, total_frame, fps
 
 
-def make_dataset(video_root, video_name_list, sample_duration, no_candidate):
+def make_dataset(video_root, video_name_list, sample_duration, candidate):
     if not isinstance(video_name_list, list):
-        video_list, total_frame, fps = make_clip_list(video_root, video_name_list, sample_duration, no_candidate)
+        video_list, total_frame, fps = make_clip_list(video_root, video_name_list, sample_duration, candidate)
         return video_list, total_frame, fps
     else:
         video_all_list = []
         video_length_list = []
         video_fps_list = []
         for video_name in video_name_list:
-            video_list, total_frame, fps = make_clip_list(video_root, video_name, sample_duration, no_candidate)
+            video_list, total_frame, fps = make_clip_list(video_root, video_name, sample_duration, candidate)
             video_all_list += video_list
             video_length_list += [total_frame]
             video_fps_list += [fps]
@@ -102,15 +102,15 @@ def make_dataset(video_root, video_name_list, sample_duration, no_candidate):
 class DataSet(data.Dataset):
     def __init__(self, video_root, video_name,
                  spatial_transform=None, temporal_transform=None, target_transform=None,
-                 sample_duration=16, no_candidate=True,
+                 sample_duration=16, candidate=False,
                  get_loader=get_default_video_loader):
         # torch.set_default_tensor_type('torch.cuda.FloatTensor')
         self.video_list, self.total_frame, self.fps = make_dataset(
-            video_root, video_name, sample_duration, no_candidate)
+            video_root, video_name, sample_duration, candidate)
         self.spatial_transform = spatial_transform
         self.temporal_transform = temporal_transform
         self.target_transform = target_transform
-        self.no_candidate = no_candidate
+        self.candidate = candidate
         self.loader = get_loader()
 
     def __getitem__(self, index):
@@ -125,7 +125,7 @@ class DataSet(data.Dataset):
         frame_pos = self.video_list[index]['frame_pos']
         sample_duration = self.video_list[index]['sample_duration']
 
-        if not self.no_candidate:
+        if self.candidate:
             start_frame = int(frame_pos - (sample_duration / 2 - 1))
             start_frame = 0 if start_frame < 0 else start_frame
         else:
