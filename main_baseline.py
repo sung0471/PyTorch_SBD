@@ -116,12 +116,12 @@ def get_result(labels, frame_pos, opt):
         if label > 0:
             # transition 데이터가 없을 때
             if len(final_res) == 0:
-                final_res.append((frame_pos[i], frame_pos[i] + opt.sample_duration - 1, label))
+                final_res.append((frame_pos[i], frame_pos[i] + opt.sample_duration, label))
             else:
                 last_boundary = final_res[-1][1]
                 # 범위가 겹치지 않을때
                 if last_boundary < frame_pos[i]:
-                    final_res.append((frame_pos[i], frame_pos[i] + opt.sample_duration - 1, label))
+                    final_res.append((frame_pos[i], frame_pos[i] + opt.sample_duration, label))
                 # 범위가 겹칠 때
                 else:
                     start_boundary = final_res[-1][0]
@@ -130,33 +130,33 @@ def get_result(labels, frame_pos, opt):
                     if cut_priority:
                         # 레이블이 같을 때
                         if last_label == label:
-                            final_res[-1] = (start_boundary, frame_pos[i] + opt.sample_duration - 1, label)
+                            final_res[-1] = (start_boundary, frame_pos[i] + opt.sample_duration, label)
                         # 나중에 나온 레이블이 cut
                         elif last_label < label:
-                            final_res[-1] = (start_boundary, frame_pos[i] - 1, last_label)
-                            final_res.append((frame_pos[i], frame_pos[i] + opt.sample_duration - 1, label))
+                            final_res[-1] = (start_boundary, frame_pos[i], last_label)
+                            final_res.append((frame_pos[i], frame_pos[i] + opt.sample_duration, label))
                         # 나중에 나온 레이블이 gradual
                         else:
-                            final_res.append((last_boundary + 1, frame_pos[i] + opt.sample_duration - 1, label))
+                            final_res.append((last_boundary, frame_pos[i] + opt.sample_duration, label))
                     # gradual이 cut보다 우선하는 정책
                     elif gradual_priority:
                         # 레이블이 같을 때
                         if last_label == label:
-                            final_res[-1] = (start_boundary, frame_pos[i] + opt.sample_duration - 1, label)
+                            final_res[-1] = (start_boundary, frame_pos[i] + opt.sample_duration, label)
                         # 나중에 나온 레이블이 gradual
                         elif last_label > label:
-                            final_res[-1] = (start_boundary, frame_pos[i] - 1, last_label)
-                            final_res.append((frame_pos[i], frame_pos[i] + opt.sample_duration - 1, label))
+                            final_res[-1] = (start_boundary, frame_pos[i], last_label)
+                            final_res.append((frame_pos[i], frame_pos[i] + opt.sample_duration, label))
                         # 나중에 나온 레이블이 cut
                         else:
-                            final_res.append((last_boundary + 1, frame_pos[i] + opt.sample_duration - 1, label))
+                            final_res.append((last_boundary, frame_pos[i] + opt.sample_duration, label))
                     # 나중에 오는 transition이 우선하는 정책
                     else:
                         if last_label == label:
-                            final_res[-1] = (start_boundary, frame_pos[i] + opt.sample_duration - 1, label)
+                            final_res[-1] = (start_boundary, frame_pos[i] + opt.sample_duration, label)
                         else:
-                            final_res[-1] = (start_boundary, frame_pos[i] - 1, last_label)
-                            final_res.append((frame_pos[i], frame_pos[i] + opt.sample_duration - 1, label))
+                            final_res[-1] = (start_boundary, frame_pos[i], last_label)
+                            final_res.append((frame_pos[i], frame_pos[i] + opt.sample_duration, label))
 
         else:
             pass
@@ -188,7 +188,7 @@ def test(test_data_loader, model, device):
         clip = Variable(clip, requires_grad=False)
         results = model(clip)
         # if use teacher student network, only get result of student network output
-        # if not opt.no_multiloss:
+        # if opt.multiloss:
         #     results = results[1]
 
         labels += get_label(results)
@@ -217,6 +217,24 @@ def load_checkpoint(model, opt_model):
     model.load_state_dict(checkpoint['state_dict'])
 
 
+def get_pickle_dir(root_dir, opt):
+    model = 'KD' if opt.multiloss else opt.model
+    is_pretrained = 'pretrained' if opt.pretrained_model else 'no_pretrained'
+    epoch = 'epoch_' + str(opt.epoch)
+
+    model_dir = os.path.join(root_dir, model)
+    if not os.path.exists(model_dir):
+        os.mkdir(model_dir)
+    pretrained_dir = os.path.join(root_dir, model, is_pretrained)
+    if not os.path.exists(pretrained_dir):
+        os.mkdir(pretrained_dir)
+    pickle_dir = os.path.join(root_dir, model, is_pretrained, epoch)
+    if not os.path.exists(pickle_dir):
+        os.mkdir(pickle_dir)
+
+    return pickle_dir
+
+
 def save_pickle(labels_path, frame_pos_path, labels, frame_pos):
     with open(labels_path, 'wb') as f:
         pickle.dump(labels, f)
@@ -235,7 +253,7 @@ def load_pickle(labels_path, frame_pos_path):
 def test_misaeng(opt, device, model):
     # opt = parse_opts()
 
-    # if not opt.no_multiloss:
+    # if opt.multiloss:
     #     teacher_model_path = 'models/Alexnet-final.pth'
     #     model = teacher_student_net(opt, teacher_model_path, 'test', device)
     # else:
@@ -254,12 +272,8 @@ def test_misaeng(opt, device, model):
     with open(misaeng_list_path, 'r') as f:
         video_name_list = [line.strip('\n') for line in f.readlines()]
 
+    pickle_dir = get_pickle_dir(root_dir, opt)
     is_full_data = '.full' if opt.is_full_data else '.no_full'
-    dir = 'KD' if not opt.no_multiloss else opt.model
-    epoch = 'epoch_' + str(opt.epoch)
-    pickle_dir = os.path.join(root_dir, dir, epoch)
-    if not os.path.exists(pickle_dir):
-        os.mkdir(pickle_dir)
 
     res = {}
     # print('\n====> Testing Start', flush=True)
@@ -273,7 +287,7 @@ def test_misaeng(opt, device, model):
                                  temporal_transform=temporal_transform,
                                  target_transform=target_transform,
                                  sample_duration=opt.sample_duration,
-                                 no_candidate=opt.no_candidate)
+                                 candidate=opt.candidate)
         test_data_loader = torch.utils.data.DataLoader(test_data, batch_size=opt.batch_size,
                                                        num_workers=opt.n_threads, pin_memory=True)
 
@@ -352,7 +366,7 @@ def test_misaeng(opt, device, model):
 def test_dataset(opt, device, model):
     # opt = parse_opts()
 
-    # if not opt.no_multiloss:
+    # if opt.multiloss:
     #     teacher_model_path = 'models/Alexnet-final.pth'
     #     model = teacher_student_net(opt, teacher_model_path, 'test', device)
     # else:
@@ -371,12 +385,8 @@ def test_dataset(opt, device, model):
     with open(opt.test_list_path, 'r') as f:
         video_name_list = [line.strip('\n') for line in f.readlines()]
 
+    pickle_dir = get_pickle_dir(root_dir, opt)
     is_full_data = '.full' if opt.is_full_data else '.no_full'
-    dir = 'KD' if not opt.no_multiloss else opt.model
-    epoch = 'epoch_' + str(opt.epoch)
-    pickle_dir = os.path.join(root_dir, dir, epoch)
-    if not os.path.exists(pickle_dir):
-        os.mkdir(pickle_dir)
 
     res = {}
     # print('\n====> Testing Start', flush=True)
@@ -389,7 +399,7 @@ def test_dataset(opt, device, model):
                                  temporal_transform=temporal_transform,
                                  target_transform=target_transform,
                                  sample_duration=opt.sample_duration,
-                                 no_candidate=opt.no_candidate)
+                                 candidate=opt.candidate)
         test_data_loader = torch.utils.data.DataLoader(test_data, batch_size=opt.batch_size,
                                                        num_workers=opt.n_threads, pin_memory=True)
         labels_path = os.path.join(pickle_dir, video_name + is_full_data + '.labels')
@@ -458,7 +468,7 @@ def train(cur_iter, iter_per_epoch, epoch, data_loader, model, criterion, optimi
     epoch_acc = 0.0
 
     # for debug
-    # print(not(opt.no_cuda)) : True
+    # print(opt.cuda) : True
 
     total_iter = epoch * iter_per_epoch
     save_timing = int(iter_per_epoch / 5)
@@ -475,12 +485,12 @@ def train(cur_iter, iter_per_epoch, epoch, data_loader, model, criterion, optimi
         for _, (inputs, targets) in enumerate(data_loader):
 
             # 19.3.7 add
-            # if not opt.no_cuda:
+            # if opt.cuda:
             #     targets = targets.cuda(async=True)
             #     inputs = inputs.cuda(async=True)
 
             # 19.3.8. revision
-            if not opt.no_cuda:
+            if opt.cuda:
                 targets = targets.cuda(device, non_blocking=True)
                 inputs = inputs.cuda(device, non_blocking=True)
 
@@ -491,7 +501,7 @@ def train(cur_iter, iter_per_epoch, epoch, data_loader, model, criterion, optimi
 
             loss = criterion(outputs, targets)
 
-            if not opt.no_multiloss:
+            if opt.multiloss:
                 outputs = outputs[1]
 
             acc = calculate_accuracy(outputs, targets)
@@ -574,7 +584,7 @@ def train_misaeng(opt, device, model):
 
     # # 19.5.16 add
     # # set default tensor type
-    # if torch.cuda.is_available() and not opt.no_cuda:
+    # if torch.cuda.is_available() and opt.cuda:
     #     torch.backends.benchmark = True
     #     torch.set_default_tensor_type('torch.cuda.FloatTensor')
     # else:
@@ -585,7 +595,7 @@ def train_misaeng(opt, device, model):
 
     # # 19.5.7. add
     # # teacher student option add
-    # if not opt.no_multiloss:
+    # if opt.multiloss:
     #     teacher_model_path = 'models/Alexnet-final.pth'
     #     model = teacher_student_net(opt, teacher_model_path, 'train', device)
     # else:
@@ -599,7 +609,7 @@ def train_misaeng(opt, device, model):
     # # `19.5.16. : from cls.py to main_baseline.py
     # # `19.3.8
     # # model = model.cuda(device)
-    # if not opt.no_cuda:
+    # if opt.cuda:
     #     torch.backends.benchmark = True
     #     model = model.to(device)
     #     # model.cuda()
@@ -629,16 +639,16 @@ def train_misaeng(opt, device, model):
 
     # 19.5.7. add
     # teacher student option add
-    if not opt.no_multiloss:
+    if opt.multiloss:
         criterion = multiloss()
     else:
         criterion = nn.CrossEntropyLoss()
 
     # 19.3.8 revision
-    if not opt.no_cuda:
+    if opt.cuda:
         criterion = criterion.to(device)
 
-    if not opt.no_train:
+    if opt.train:
         spatial_transform = get_train_spatial_transform(opt)
         temporal_transform = None
         target_transform = None
@@ -646,7 +656,7 @@ def train_misaeng(opt, device, model):
         # `19.3.7 : add only_gradual path
         list_root_path = list()
         list_root_path.append(os.path.join(opt.root_dir, opt.train_subdir))
-        list_root_path.append(os.path.join(opt.root_dir, 'only_gradual'))
+        list_root_path.append(os.path.join(opt.root_dir, opt.only_gradual_subdir))
         print(list_root_path, flush=True)
         print("[INFO] reading : ", opt.video_list_path, flush=True)
         training_data = train_DataSet(list_root_path, opt.video_list_path, opt,
@@ -673,13 +683,13 @@ def build_final_model(opt, device):
 
     # 19.5.7. add
     # teacher student option add
-    if not opt.no_multiloss:
+    if opt.multiloss:
         teacher_model_path = 'models/Alexnet-final.pth'
         model = teacher_student_net(opt, teacher_model_path, device)
     else:
         model = build_model(opt, opt.phase, device)
 
-    if not opt.no_cuda and opt.model_type == 'new':
+    if opt.cuda and opt.model_type == 'new':
         # model = model.cuda(device)
         # use multi_gpu for training and testing
         model = nn.DataParallel(model, device_ids=range(opt.gpu_num))
@@ -693,8 +703,8 @@ def build_final_model(opt, device):
 
 def main():
     # 19.5.17 for ubuntu
-    # torch.multiprocessing.set_start_method("spawn")
-    # print(torch.__version__)
+    torch.multiprocessing.set_start_method("spawn")
+    print(torch.__version__)
 
     # 19.5.7 add
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -706,7 +716,7 @@ def main():
 
     # 19.5.16 add
     # set default tensor type
-    if torch.cuda.is_available() and not opt.no_cuda:
+    if torch.cuda.is_available() and opt.cuda:
         torch.backends.benchmark = True
         torch.set_default_tensor_type('torch.cuda.FloatTensor')
     else:
@@ -715,7 +725,7 @@ def main():
     # assert opt.phase in ['train', 'test']
     # # 19.5.7. add
     # # teacher student option add
-    # if not opt.no_multiloss:
+    # if opt.multiloss:
     #     teacher_model_path = 'models/Alexnet-final.pth'
     #     model = teacher_student_net(opt, teacher_model_path, device)
     # else:
