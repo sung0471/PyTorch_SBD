@@ -16,7 +16,7 @@ def build_model(opt, phase, device):
 
     # model=gradual_cls(opt.sample_duration,opt.sample_size,opt.sample_size,model,num_classes)
     # print(model)
-    if not opt.no_pretrained_model:
+    if opt.pretrained_model:
         print("use pretrained model")
         if phase == 'train' and opt.pretrain_path:
             model.load_weights(opt.pretrain_path)
@@ -25,7 +25,7 @@ def build_model(opt, phase, device):
 
     # `19.3.8
     # model = model.cuda(device)
-    if not opt.no_cuda and opt.model_type == 'old':
+    if opt.cuda and opt.model_type == 'old':
         # torch.backends.benchmark = True
         model = model.to(device)
         # model.cuda()
