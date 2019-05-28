@@ -272,7 +272,8 @@ def test_misaeng(opt, device, model):
     with open(misaeng_list_path, 'r') as f:
         video_name_list = [line.strip('\n') for line in f.readlines()]
 
-    pickle_dir = get_pickle_dir(root_dir, opt)
+    pickle_root_dir = os.path.join(opt.result_dir, 'test_pickle')
+    pickle_dir = get_pickle_dir(pickle_root_dir, opt)
     is_full_data = '.full' if opt.is_full_data else '.no_full'
 
     res = {}
@@ -385,7 +386,8 @@ def test_dataset(opt, device, model):
     with open(opt.test_list_path, 'r') as f:
         video_name_list = [line.strip('\n') for line in f.readlines()]
 
-    pickle_dir = get_pickle_dir(root_dir, opt)
+    pickle_root_dir = os.path.join(opt.result_dir, 'test_pickle')
+    pickle_dir = get_pickle_dir(pickle_root_dir, opt)
     is_full_data = '.full' if opt.is_full_data else '.no_full'
 
     res = {}
@@ -547,7 +549,7 @@ def train(cur_iter, iter_per_epoch, epoch, data_loader, model, criterion, optimi
     }
     torch.save(states, save_file_path)
 
-    json.dump(total_acc, open(os.path.join(opt.result_dir,'epoch_accuracy.json'),'w'))
+    json.dump(total_acc, open(os.path.join(opt.result_dir, 'epoch_accuracy.json'), 'w'))
 
 
 def get_lastest_model(opt):
