@@ -14,7 +14,7 @@ def parse_opts():
     parser.add_argument('--iter_per_epoch', default=31250, type=int)
     parser.add_argument('--epoch', default=5, type=int)
     parser.add_argument('--model_type', default='old', type=str, help='(old | new) old: model>parallel>cuda>train / new: model>train>parallel>cuda')
-    parser.add_argument('--use_save_timing', default=True, help='if True, adjust save timing from 2000 to 5000. else, iter_per_epoch / 5')
+    parser.add_argument('--use_save_timing', default=False, help='if True, adjust save timing from 2000 to 5000. else, iter_per_epoch / 5')
     parser.add_argument('--n_classes', default=3, type=int, help='Number of classes')
     parser.add_argument('--shuffle', default=True, help="shuffle the dataset")
     parser.add_argument('--sample_size', default=128, type=int, help='Height and width of inputs')
