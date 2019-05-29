@@ -433,10 +433,7 @@ def test_dataset(opt, device, model):
     total_time = datetime.timedelta(seconds=total_time)
     print("[INFO] finish test!!, {}".format(total_time), flush=True)
 
-    out_path = os.path.join(opt.result_dir, 'results.json')
-    if not os.path.exists(out_path):
-        json.dump(res, open(out_path, 'w'))
-    eval_res.eval(out_path, opt.gt_dir)
+    return res
 
 
 def calculate_accuracy(outputs, targets):
@@ -743,7 +740,11 @@ def main():
         if opt.misaeng:
             test_misaeng(opt, device, model)
         else:
-            test_dataset(opt, device, model)
+            out_path = os.path.join(opt.result_dir, 'results.json')
+            if not os.path.exists(out_path):
+                res = test_dataset(opt, device, model)
+                json.dump(res, open(out_path, 'w'))
+            eval_res.eval(out_path, opt.gt_dir)
 
 
 if __name__ == '__main__':
