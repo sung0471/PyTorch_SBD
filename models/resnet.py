@@ -11,6 +11,7 @@ __all__ = ['ResNet', 'resnet10', 'resnet18', 'resnet34', 'resnet50', 'resnet101'
 # 19.5.7. add
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
+
 def conv3x3x3(in_planes, out_planes, stride=1):
     # 3x3x3 convolution with padding
     return nn.Conv3d(in_planes, out_planes, kernel_size=3,
@@ -18,9 +19,6 @@ def conv3x3x3(in_planes, out_planes, stride=1):
 
 
 def downsample_basic_block(x, planes, stride):
-    # 19.3.21 add
-    # device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
-
     out = F.avg_pool3d(x, kernel_size=1, stride=stride)
     zero_pads = torch.Tensor(out.size(0), planes - out.size(1),
                              out.size(2), out.size(3),
@@ -77,8 +75,8 @@ class Bottleneck(nn.Module):
         self.conv2 = nn.Conv3d(planes, planes, kernel_size=3, stride=stride,
                                padding=1, bias=False)
         self.bn2 = nn.BatchNorm3d(planes)
-        self.conv3 = nn.Conv3d(planes, planes * 4, kernel_size=1, bias=False)
-        self.bn3 = nn.BatchNorm3d(planes * 4)
+        self.conv3 = nn.Conv3d(planes, planes * self.expansion, kernel_size=1, bias=False)
+        self.bn3 = nn.BatchNorm3d(planes * self.expansion)
         self.relu = nn.ReLU(inplace=True)
         self.downsample = downsample
         self.stride = stride
