@@ -12,8 +12,7 @@ class teacher_student_net(nn.Module):
 
         opt.model = 'alexnet'
         self.teacher_model = build_model(opt, 'test', device)
-        self.teacher_model_path = teacher_model_path
-        self.load_checkpoint(self.teacher_model, self.teacher_model_path)
+        self.load_checkpoint(self.teacher_model, teacher_model_path)
 
         opt.model = 'resnext'
         self.student_model = build_model(opt, self.phase, device)
@@ -33,7 +32,7 @@ class teacher_student_net(nn.Module):
 
     def load_checkpoint(self, model, path):
         checkpoint = torch.load(path)
-        model.load_state_dict(checkpoint['state_dict'])
+        model.load_state_dict(checkpoint['state_dict'], strict=False)
 
 
 if __name__ == '__main__':
