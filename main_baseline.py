@@ -4,6 +4,7 @@ import os
 import json
 from torch import nn
 from torch import optim
+import sys
 
 from opts import parse_opts
 from lib.spatial_transforms import *
@@ -176,18 +177,22 @@ def get_result(labels, frame_pos, opt):
     return final_res
 
 
-def test(test_data_loader, model, device):
+def test(test_data_loader, model, device, opt):
     labels = []
     frame_pos = []
 
     batch_time = time.time()
     total_iter = len(test_data_loader)
     for i, (clip, boundary) in enumerate(test_data_loader):
-        # clip = clip.to(device)
-        clip = clip.cuda(device, non_blocking=True)
-        clip = Variable(clip, requires_grad=False)
+        # for check size
+        # print(sys.getsizeof(inputs))
+
+        if opt.cuda:
+            # clip = clip.to(device)
+            clip = clip.cuda(device, non_blocking=True)
+        clip = Variable(clip)
         results = model(clip)
-        # if use teacher student network, only get result of student network output
+        # # if use teacher student network, only get result of student network output
         # if opt.multiloss:
         #     results = results[1]
 
@@ -299,7 +304,7 @@ def test_misaeng(opt, device, model):
         labels_path = os.path.join(pickle_dir, video_name + is_full_data + '.labels')
         frame_pos_path = os.path.join(pickle_dir, video_name + is_full_data + '.frame_pos')
         if not os.path.exists(labels_path) and not os.path.exists(frame_pos_path):
-            labels, frame_pos = test(test_data_loader, model, device)
+            labels, frame_pos = test(test_data_loader, model, device, opt)
             save_pickle(labels_path, frame_pos_path, labels, frame_pos)
         else:
             labels, frame_pos = load_pickle(labels_path, frame_pos_path)
@@ -407,7 +412,7 @@ def test_dataset(opt, device, model):
         labels_path = os.path.join(pickle_dir, video_name + is_full_data + '.labels')
         frame_pos_path = os.path.join(pickle_dir, video_name + is_full_data + '.frame_pos')
         if not os.path.exists(labels_path) and not os.path.exists(frame_pos_path):
-            labels, frame_pos = test(test_data_loader, model, device)
+            labels, frame_pos = test(test_data_loader, model, device, opt)
             save_pickle(labels_path, frame_pos_path, labels, frame_pos)
         else:
             labels, frame_pos = load_pickle(labels_path, frame_pos_path)
@@ -482,6 +487,8 @@ def train(cur_iter, iter_per_epoch, epoch, data_loader, model, criterion, optimi
     while i < total_iter:
         start_time = time.time()
         for _, (inputs, targets) in enumerate(data_loader):
+            # for check size
+            # print(sys.getsizeof(inputs))
 
             # 19.3.7 add
             # if opt.cuda:
@@ -733,6 +740,16 @@ def main():
     
     # 위의 라인을 하나의 함수로 통합
     model = build_final_model(opt, device)
+
+    # iter_per_epoch을 opt.is_full_data와 opt.batch_size에 맞게 자동으로 조정
+    if opt.iter_per_epoch == 0:
+        if opt.is_full_data:
+            opt.iter_per_epoch = 500000
+        else:
+            opt.iter_per_epoch = 70000
+
+        opt.iter_per_epoch = int(opt.iter_per_epoch / opt.batch_size)
+    print("iter_per_epoch : {}, batch_size : {}".format(opt.iter_per_epoch, opt.batch_size))
 
     if opt.phase == 'train':
         train_misaeng(opt, device, model)
