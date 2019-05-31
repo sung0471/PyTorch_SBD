@@ -26,13 +26,14 @@ def build_model(opt, phase, device):
     # `19.3.8
     # model = model.cuda(device)
     if opt.cuda and opt.model_type == 'old':
+        # torch.backends.benchmark = True
+
         # `19.5.14.
         # use multi_gpu for training and testing
         model = nn.DataParallel(model, device_ids=range(opt.gpu_num))
-
-        # torch.backends.benchmark = True
-        model = model.to(device)
         # model.cuda()
+        # model = model.to(device)
+        model.to(device)
 
     if phase == 'train':
         # for debug
