@@ -696,11 +696,11 @@ def build_final_model(opt, device):
         model = build_model(opt, opt.phase, device)
 
     if opt.cuda and opt.model_type == 'new':
-        # model = model.cuda(device)
         # use multi_gpu for training and testing
         model = nn.DataParallel(model, device_ids=range(opt.gpu_num))
-        model = model.to(device)
         # model.cuda()
+        # model = model.cuda(device)
+        model.to(device)
 
     print(model)
 
