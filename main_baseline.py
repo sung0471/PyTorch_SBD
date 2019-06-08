@@ -646,7 +646,7 @@ def train_misaeng(opt, device, model):
     # 19.5.7. add
     # teacher student option add
     if opt.multiloss:
-        criterion = multiloss()
+        criterion = multiloss(loss_type=opt.multiloss_type)
     else:
         criterion = nn.CrossEntropyLoss()
 
@@ -685,7 +685,9 @@ def train_misaeng(opt, device, model):
 
 def build_final_model(opt, device):
     assert opt.phase in ['train', 'test']
-    assert opt.model_type in ['old', 'new']
+    # 19.6.4 remove
+    # is not used
+    # assert opt.model_type in ['old', 'new']
 
     # 19.5.7. add
     # teacher student option add
@@ -695,12 +697,14 @@ def build_final_model(opt, device):
     else:
         model = build_model(opt, opt.phase, device)
 
-    if opt.cuda and opt.model_type == 'new':
-        # use multi_gpu for training and testing
-        model = nn.DataParallel(model, device_ids=range(opt.gpu_num))
-        # model.cuda()
-        # model = model.cuda(device)
-        model.to(device)
+    # 19.6.4.
+    # remove below lines > opt.model_type = 'new' is not trainable
+    # if opt.cuda and opt.model_type == 'new':
+    #     # use multi_gpu for training and testing
+    #     model = nn.DataParallel(model, device_ids=range(opt.gpu_num))
+    #     # model.cuda()
+    #     # model = model.cuda(device)
+    #     model.to(device)
 
     print(model)
 
@@ -708,9 +712,11 @@ def build_final_model(opt, device):
 
 
 def main():
+    # 19.5.17 add
+    print(torch.__version__)
+
     # 19.5.17 for ubuntu
     torch.multiprocessing.set_start_method("spawn")
-    print(torch.__version__)
 
     # 19.5.7 add
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
