@@ -2,9 +2,12 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+
 class deepSBD(nn.Module):
-    def __init__(self):
+    def __init__(self, model_type='new'):
         super(deepSBD, self).__init__()
+        self.model_type = model_type
+
         self.conv1=nn.Conv3d(3, 96, kernel_size=3, stride=(1, 2, 2),
                                padding=(0,0,0), bias=True)
         self.relu1=nn.ReLU(inplace=True)
@@ -23,8 +26,10 @@ class deepSBD(nn.Module):
                                padding=1, bias=True)
         self.relu5=nn.ReLU(inplace=True)
         self.pool1=nn.MaxPool3d(kernel_size=(3, 3, 3), stride=(1,2,2), padding=0)
+        self.drop1=nn.Dropout()
         self.fc6=nn.Linear(100352, 2048) #301056
         self.relu6=nn.ReLU(inplace=True)
+        self.drop2=nn.Dropout()
         self.fc7=nn.Linear(2048, 2048)
         self.relu7=nn.ReLU(inplace=True)
         self.fc8=nn.Linear(2048, 3)
@@ -43,9 +48,17 @@ class deepSBD(nn.Module):
         x=self.conv5(x)
         x=self.relu5(x)
         x=x.view(x.size(0),-1)
+        if self.model_type == 'dropout':
+            x=self.drop1(x)
         x=self.fc6(x)
         x=self.relu6(x)
+        if self.model_type == 'dropout':
+            x=self.drop2(x)
         x=self.fc7(x)
         x=self.relu7(x)
         x=self.fc8(x)
         return x
+
+if __name__ == '__main__':
+    model = deepSBD()
+    print(model)
