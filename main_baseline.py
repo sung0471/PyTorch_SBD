@@ -227,6 +227,8 @@ def get_pickle_dir(root_dir, opt):
     is_pretrained = 'pretrained' if opt.pretrained_model else 'no_pretrained'
     epoch = 'epoch_' + str(opt.epoch)
 
+    if not os.path.exists(root_dir):
+        os.mkdir(root_dir)
     model_dir = os.path.join(root_dir, model)
     if not os.path.exists(model_dir):
         os.mkdir(model_dir)
