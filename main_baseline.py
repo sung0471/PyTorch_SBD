@@ -210,9 +210,7 @@ def test(test_data_loader, model, device, opt):
 
 
 def load_checkpoint(model, opt_model):
-    if opt_model=='alexnet':
-        path = 'models/Alexnet-final.pth'
-    elif opt_model=='resnet' or opt_model=='resnext':
+    if opt_model == 'alexnet' or opt_model == 'resnet' or opt_model == 'resnext':
         path = 'results/model_final.pth'
     else:
         print("[ERR] incorrect opt.model : ", opt_model)
