@@ -8,9 +8,10 @@ from models.deepSBD import deepSBD
 
 def generate_model(opt):
     assert opt.model in ['resnet', 'alexnet', 'resnext']
+    assert opt.alexnet_type in ['origin', 'dropout']
 
-    if opt.model=='alexnet':
-        model = deepSBD()
+    if opt.model == 'alexnet':
+        model = deepSBD(model_type=opt.alexnet_type)
     elif opt.model == 'resnet':
         from models.resnet import get_fine_tuning_parameters
 
