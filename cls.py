@@ -25,7 +25,11 @@ def build_model(opt, phase, device):
 
     # `19.3.8
     # model = model.cuda(device)
-    if opt.cuda and opt.model_type == 'old':
+
+    # `19.6.4
+    # remove opt.model_type > 'new' is not trainable
+    # if opt.cuda and opt.model_type == 'old':
+    if opt.cuda:
         # torch.backends.benchmark = True
 
         # `19.5.14.
