@@ -716,7 +716,7 @@ def main():
     print(torch.__version__)
 
     # 19.5.17 for ubuntu
-    torch.multiprocessing.set_start_method("spawn")
+    # torch.multiprocessing.set_start_method("spawn")
 
     # 19.5.7 add
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
