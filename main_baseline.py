@@ -470,6 +470,7 @@ def train(cur_iter, iter_per_epoch, epoch, data_loader, model, criterion, optimi
     i = cur_iter
     total_acc = [0.0] * epoch
     epoch_acc = 0.0
+    avg_acc = 0.0
 
     # for debug
     # print(opt.cuda) : True
@@ -511,6 +512,7 @@ def train(cur_iter, iter_per_epoch, epoch, data_loader, model, criterion, optimi
                 outputs = outputs[1]
 
             acc = calculate_accuracy(outputs, targets)
+            avg_acc += acc / 10
             epoch_acc += acc / iter_per_epoch
 
             optimizer.zero_grad()
@@ -522,8 +524,9 @@ def train(cur_iter, iter_per_epoch, epoch, data_loader, model, criterion, optimi
 
             if i % 10 == 0:
                 batch_time = time.time() - start_time
-                print('Iter:{} Loss_conf:{} epoch_acc:{:.6f} lr:{} batch_time:{:.3f}s'.format(
-                    i, loss.data, epoch_acc, optimizer.param_groups[0]['lr'], batch_time), flush=True)
+                print('Iter:{} Loss_conf:{} avg_acc:{} epoch_acc:{:.10f} lr:{} batch_time:{:.3f}s'.format(
+                    i, loss.data, avg_acc, epoch_acc, optimizer.param_groups[0]['lr'], batch_time), flush=True)
+                avg_acc = 0.0
                 start_time = time.time()
 
             if i % save_timing == 0:
