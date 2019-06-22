@@ -32,7 +32,7 @@ class teacher_student_net(nn.Module):
 
     def load_checkpoint(self, model, path):
         checkpoint = torch.load(path)
-        model.load_state_dict(checkpoint['state_dict'], strict=False)
+        model.load_state_dict(checkpoint['state_dict'])
 
 
 if __name__ == '__main__':
