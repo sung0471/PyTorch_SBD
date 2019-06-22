@@ -34,13 +34,13 @@ class multiloss(nn.Module):
             # loss_teacher /= 2
             # loss_student /= 2
         elif self.loss_type == 'dual':
-            alpha = 0.5
+            # alpha = 0.5
             _, pred = teacher_pred.topk(1, 1, True)
             pred = pred.t()
             pred = pred.squeeze(0).to(torch.long)
-            loss_teacher = self.KLDiv(F.log_softmax(student_pred, dim=1), F.softmax(teacher_pred, dim=1)) * alpha + \
+            loss_teacher = self.KLDiv(F.log_softmax(student_pred, dim=1), F.softmax(teacher_pred, dim=1)) + \
                            self.CrossEnt(student_pred, pred)
-            loss_student = self.CrossEnt(student_pred, targets) * (1. - alpha)
+            loss_student = self.CrossEnt(student_pred, targets)
         else:
             assert False
 
