@@ -733,9 +733,9 @@ def main():
     # set default tensor type
     if torch.cuda.is_available() and opt.cuda:
         torch.backends.benchmark = True
-        torch.set_default_tensor_type('torch.cuda.FloatTensor')
-    else:
-        torch.set_default_tensor_type('torch.FloatTensor')
+    #     torch.set_default_tensor_type('torch.cuda.FloatTensor')
+    # else:
+    #     torch.set_default_tensor_type('torch.FloatTensor')
 
     # assert opt.phase in ['train', 'test']
     # # 19.5.7. add
@@ -746,7 +746,7 @@ def main():
     # else:
     #     model = build_model(opt, opt.phase, device)
     # print(model)
-    
+
     # 위의 라인을 하나의 함수로 통합
     model = build_final_model(opt, device)
 
@@ -757,7 +757,7 @@ def main():
         else:
             opt.iter_per_epoch = 70000
 
-        opt.iter_per_epoch = int(opt.iter_per_epoch / opt.batch_size)
+    opt.iter_per_epoch = int(opt.iter_per_epoch / opt.batch_size)
     print("iter_per_epoch : {}, batch_size : {}".format(opt.iter_per_epoch, opt.batch_size))
 
     if opt.phase == 'train':
