@@ -6,13 +6,17 @@ from models import generate_model
 import os
 
 
-def build_model(opt, phase, device):
+# 19.6.26.
+# add parameter=model_type
+# for knowledge distillation
+def build_model(opt, model_type, phase, device):
     if phase != "test" and phase != "train":
         print("Error: Phase not recognized")
         return
 
     # num_classes = opt.n_classes
-    model = generate_model(opt)
+    # 19.6.26. add 'model_type' parameter
+    model = generate_model(opt, model_type)
 
     # model=gradual_cls(opt.sample_duration,opt.sample_size,opt.sample_size,model,num_classes)
     # print(model)
@@ -28,10 +32,12 @@ def build_model(opt, phase, device):
 
     # `19.6.4
     # remove opt.model_type > 'new' is not trainable
-    # if opt.cuda and opt.model_type == 'old':
-    if opt.cuda:
-        # torch.backends.benchmark = True
-
+    # 19.6.26.
+    # opt.model_type = 'new' 다시 사용
+    # benchmark도 전체적으로 적용하여 재시도
+    if opt.cuda and opt.model_type == 'old':
+    # if opt.cuda:
+        torch.backends.benchmark = True
         # `19.5.14.
         # use multi_gpu for training and testing
         model = nn.DataParallel(model, device_ids=range(opt.gpu_num))
