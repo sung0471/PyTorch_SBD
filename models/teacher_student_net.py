@@ -5,17 +5,21 @@ import os
 
 
 class teacher_student_net(nn.Module):
-    def __init__(self, opt, teacher_model_path, device):
+    def __init__(self, opt, device):
         self.phase = opt.phase
         # self.device = device
         super(teacher_student_net, self).__init__()
 
-        opt.model = 'alexnet'
-        self.teacher_model = build_model(opt, 'test', device)
-        self.load_checkpoint(self.teacher_model, teacher_model_path)
+        # 19.6.26.
+        # opt.model = '' > 주석처리
+        # opt.teacher_model과 opt.model을 parameter로 삽입
 
-        opt.model = 'resnext'
-        self.student_model = build_model(opt, self.phase, device)
+        # opt.model = 'alexnet'
+        self.teacher_model = build_model(opt, opt.teacher_model, 'test', device)
+        self.load_checkpoint(self.teacher_model, opt.teacher_model_path)
+
+        # opt.model = 'resnext'
+        self.student_model = build_model(opt, opt.model, self.phase, device)
 
     def forward(self, x):
         # x = x.to(self.device)
@@ -32,7 +36,7 @@ class teacher_student_net(nn.Module):
 
     def load_checkpoint(self, model, path):
         checkpoint = torch.load(path)
-        model.load_state_dict(checkpoint['state_dict'])
+        model.load_state_dict(checkpoint['state_dict'], strict=False)
 
 
 if __name__ == '__main__':
