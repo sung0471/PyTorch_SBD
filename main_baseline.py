@@ -109,102 +109,143 @@ def get_labels_from_candidate(video, temporal_length, model, spatial_transform, 
 def get_result(labels, frame_pos, opt):
     # print(labels)
     # print(frame_pos, flush=True)
+    do_origin = False
+
     cut_priority = False
     gradual_priority = False
     final_res = []
-    for i, label in enumerate(labels):
-        # cut, gradual only
-        if label > 0:
-            # transition 데이터가 없을 때
-            if len(final_res) == 0:
-                final_res.append((frame_pos[i], frame_pos[i] + opt.sample_duration, label))
-            else:
-                last_boundary = final_res[-1][1]
-                # 범위가 겹치지 않을때
-                if last_boundary < frame_pos[i]:
+    if not do_origin:
+        for i, label in enumerate(labels):
+            # cut, gradual only
+            if label > 0:
+                # transition 데이터가 없을 때
+                if len(final_res) == 0:
                     final_res.append((frame_pos[i], frame_pos[i] + opt.sample_duration, label))
-                # 범위가 겹칠 때
                 else:
-                    start_boundary = final_res[-1][0]
-                    last_label = final_res[-1][2]
-                    # cut이 gradual보다 우선하는 정책
-                    if cut_priority:
-                        # 레이블이 같을 때
-                        if last_label == label:
-                            final_res[-1] = (start_boundary, frame_pos[i] + opt.sample_duration, label)
-                        # 나중에 나온 레이블이 cut
-                        elif last_label < label:
-                            final_res[-1] = (start_boundary, frame_pos[i], last_label)
-                            final_res.append((frame_pos[i], frame_pos[i] + opt.sample_duration, label))
-                        # 나중에 나온 레이블이 gradual
-                        else:
-                            final_res.append((last_boundary, frame_pos[i] + opt.sample_duration, label))
-                    # gradual이 cut보다 우선하는 정책
-                    elif gradual_priority:
-                        # 레이블이 같을 때
-                        if last_label == label:
-                            final_res[-1] = (start_boundary, frame_pos[i] + opt.sample_duration, label)
-                        # 나중에 나온 레이블이 gradual
-                        elif last_label > label:
-                            final_res[-1] = (start_boundary, frame_pos[i], last_label)
-                            final_res.append((frame_pos[i], frame_pos[i] + opt.sample_duration, label))
-                        # 나중에 나온 레이블이 cut
-                        else:
-                            final_res.append((last_boundary, frame_pos[i] + opt.sample_duration, label))
-                    # 나중에 오는 transition이 우선하는 정책
+                    last_boundary = final_res[-1][1]
+                    # 범위가 겹치지 않을때
+                    if last_boundary < frame_pos[i]:
+                        final_res.append((frame_pos[i], frame_pos[i] + opt.sample_duration, label))
+                    # 범위가 겹칠 때
                     else:
-                        if last_label == label:
-                            final_res[-1] = (start_boundary, frame_pos[i] + opt.sample_duration, label)
+                        start_boundary = final_res[-1][0]
+                        last_label = final_res[-1][2]
+                        # cut이 gradual보다 우선하는 정책
+                        if cut_priority:
+                            # 레이블이 같을 때
+                            if last_label == label:
+                                final_res[-1] = (start_boundary, frame_pos[i] + opt.sample_duration, label)
+                            # 나중에 나온 레이블이 cut
+                            elif last_label < label:
+                                final_res[-1] = (start_boundary, frame_pos[i], last_label)
+                                final_res.append((frame_pos[i], frame_pos[i] + opt.sample_duration, label))
+                            # 나중에 나온 레이블이 gradual
+                            else:
+                                final_res.append((last_boundary, frame_pos[i] + opt.sample_duration, label))
+                        # gradual이 cut보다 우선하는 정책
+                        elif gradual_priority:
+                            # 레이블이 같을 때
+                            if last_label == label:
+                                final_res[-1] = (start_boundary, frame_pos[i] + opt.sample_duration, label)
+                            # 나중에 나온 레이블이 gradual
+                            elif last_label > label:
+                                final_res[-1] = (start_boundary, frame_pos[i], last_label)
+                                final_res.append((frame_pos[i], frame_pos[i] + opt.sample_duration, label))
+                            # 나중에 나온 레이블이 cut
+                            else:
+                                final_res.append((last_boundary, frame_pos[i] + opt.sample_duration, label))
+                        # 나중에 오는 transition이 우선하는 정책
                         else:
-                            final_res[-1] = (start_boundary, frame_pos[i], last_label)
-                            final_res.append((frame_pos[i], frame_pos[i] + opt.sample_duration, label))
+                            if last_label == label:
+                                final_res[-1] = (start_boundary, frame_pos[i] + opt.sample_duration, label)
+                            else:
+                                final_res[-1] = (start_boundary, frame_pos[i], last_label)
+                                final_res.append((frame_pos[i], frame_pos[i] + opt.sample_duration, label))
 
-        else:
-            pass
-
-    # i = 0
-    # while i < len(labels):
-    #     if labels[i] > 0:
-    #         label = labels[i]
-    #         begin = i
-    #         i += 1
-    #         while i < len(labels) and labels[i] == labels[i - 1]:
-    #             i += 1
-    #         end = i - 1
-    #         final_res.append((begin * opt.sample_duration / 2 + 1, end * opt.sample_duration / 2 + 16 + 1, label))
-    #     else:
-    #         i += 1
+            else:
+                pass
+    else:
+        i = 0
+        while i < len(labels):
+            if labels[i] > 0:
+                label = labels[i]
+                begin = i
+                i += 1
+                while i < len(labels) and labels[i] == labels[i - 1]:
+                    i += 1
+                end = i - 1
+                begin_frame = int(begin * opt.sample_duration / 2 + 1)
+                end_frame = int(end * opt.sample_duration / 2 + 16 + 1)
+                final_res.append((begin_frame, end_frame, label))
+            else:
+                i += 1
     return final_res
 
 
-def test(test_data_loader, model, device, opt):
+def test(video_path, test_data_loader, model, device, opt):
     labels = []
     frame_pos = []
 
-    batch_time = time.time()
-    total_iter = len(test_data_loader)
-    for i, (clip, boundary) in enumerate(test_data_loader):
-        # for check size
-        # print(sys.getsizeof(inputs))
+    do_origin = False
+    if not do_origin:
+        batch_time = time.time()
+        total_iter = len(test_data_loader)
+        for i, (clip, boundary) in enumerate(test_data_loader):
+            # for check size
+            # print(sys.getsizeof(inputs))
 
-        if opt.cuda:
-            # clip = clip.to(device)
-            clip = clip.cuda(device, non_blocking=True)
-        clip = Variable(clip)
-        results = model(clip)
-        # # if use teacher student network, only get result of student network output
-        # if opt.multiloss:
-        #     results = results[1]
+            clip = Variable(clip)
+            if opt.cuda:
+                # clip = clip.to(device)
+                clip = clip.cuda(device, non_blocking=True)
+            results = model(clip)
+            # # if use teacher student network, only get result of student network output
+            # if opt.multiloss:
+            #     results = results[1]
 
-        labels += get_label(results)
-        boundary = boundary.data.numpy()
-        for _ in boundary:
-            frame_pos.append(int(_+1))
+            labels += get_label(results)
+            boundary = boundary.data.numpy()
+            for _ in boundary:
+                frame_pos.append(int(_+1))
 
-        if (i+1) % 10 == 0 or i+1 == total_iter:
-            end_time = time.time() - batch_time
-            print("iter {}/{} : {}".format(i + 1, total_iter, end_time), flush=True)
-            batch_time = time.time()
+            if (i+1) % 10 == 0 or i+1 == total_iter:
+                end_time = time.time() - batch_time
+                print("iter {}/{} : {}".format(i + 1, total_iter, end_time), flush=True)
+                batch_time = time.time()
+    else:
+        spatial_transforms = get_test_spatial_transform(opt)
+        temporal_length = opt.sample_duration
+
+        assert (os.path.exists(video_path))
+        videocap = cv2.VideoCapture(video_path)
+        status = True
+        clip_batch = []
+        labels = []
+        image_clip = []
+        while status:
+            for i in range(temporal_length - len(image_clip)):
+                status, frame = videocap.read()
+                if not status:
+                    break
+                else:
+                    frame = Image.fromarray(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)).convert('RGB')
+                    frame = spatial_transforms(frame)
+                    image_clip.append(frame)
+
+            image_clip += [image_clip[-1] for _ in range(temporal_length - len(image_clip))]
+
+            if len(image_clip) == temporal_length:
+                clip = torch.stack(image_clip, 0).permute(1, 0, 2, 3)
+                clip_batch.append(clip)
+                image_clip = image_clip[int(temporal_length / 2):]
+
+            if len(clip_batch) == opt.batch_size or not status:
+                clip_tensor = torch.stack(clip_batch, 0)
+                clip_tensor = clip_tensor.cuda(device, non_blocking=True)
+                clip_tensor = Variable(clip_tensor)
+                results = model(clip_tensor)
+                labels += get_label(results)
+                clip_batch = []
 
     return labels, frame_pos
 
@@ -304,7 +345,8 @@ def test_misaeng(opt, device, model):
         labels_path = os.path.join(pickle_dir, video_name + is_full_data + '.labels')
         frame_pos_path = os.path.join(pickle_dir, video_name + is_full_data + '.frame_pos')
         if not os.path.exists(labels_path) and not os.path.exists(frame_pos_path):
-            labels, frame_pos = test(test_data_loader, model, device, opt)
+            video_path = os.path.join(root_dir, video_name)
+            labels, frame_pos = test(video_path, test_data_loader, model, device, opt)
             save_pickle(labels_path, frame_pos_path, labels, frame_pos)
         else:
             labels, frame_pos = load_pickle(labels_path, frame_pos_path)
@@ -412,7 +454,8 @@ def test_dataset(opt, device, model):
         labels_path = os.path.join(pickle_dir, video_name + is_full_data + '.labels')
         frame_pos_path = os.path.join(pickle_dir, video_name + is_full_data + '.frame_pos')
         if not os.path.exists(labels_path) and not os.path.exists(frame_pos_path):
-            labels, frame_pos = test(test_data_loader, model, device, opt)
+            video_path = os.path.join(root_dir, video_name)
+            labels, frame_pos = test(video_path, test_data_loader, model, device, opt)
             save_pickle(labels_path, frame_pos_path, labels, frame_pos)
         else:
             labels, frame_pos = load_pickle(labels_path, frame_pos_path)
@@ -690,24 +733,32 @@ def build_final_model(opt, device):
     assert opt.phase in ['train', 'test']
     # 19.6.4 remove
     # is not used
-    # assert opt.model_type in ['old', 'new']
+    # 19.6.26 revive
+    assert opt.model_type in ['old', 'new']
 
     # 19.5.7. add
     # teacher student option add
     if opt.multiloss:
-        teacher_model_path = 'models/Alexnet-final.pth'
-        model = teacher_student_net(opt, teacher_model_path, device)
+        # 19.6.26.
+        # remove teacher_model_path
+        # because use opt.teacher_model_path
+
+        # teacher_model_path = 'models/Alexnet-final.pth'
+        model = teacher_student_net(opt, device)
     else:
         model = build_model(opt, opt.phase, device)
 
     # 19.6.4.
     # remove below lines > opt.model_type = 'new' is not trainable
-    # if opt.cuda and opt.model_type == 'new':
-    #     # use multi_gpu for training and testing
-    #     model = nn.DataParallel(model, device_ids=range(opt.gpu_num))
-    #     # model.cuda()
-    #     # model = model.cuda(device)
-    #     model.to(device)
+    # 19.6.26.
+    # benchmark를 new type model일 때 전체적으로 적용 > 시도해볼 필요 있음
+    if opt.cuda and opt.model_type == 'new':
+        torch.backends.benchmark = True
+        # use multi_gpu for training and testing
+        model = nn.DataParallel(model, device_ids=range(opt.gpu_num))
+        # model.cuda()
+        # model = model.cuda(device)
+        model.to(device)
 
     print(model)
 
@@ -731,8 +782,12 @@ def main():
 
     # 19.5.16 add
     # set default tensor type
-    if torch.cuda.is_available() and opt.cuda:
-        torch.backends.benchmark = True
+    # 19.6.26.
+    # model generate 시 적용되게 수정
+    # if torch.cuda.is_available() and opt.cuda:
+    #     torch.backends.benchmark = True
+    
+    # ubuntu에서 주석처리 > 에러해결
     #     torch.set_default_tensor_type('torch.cuda.FloatTensor')
     # else:
     #     torch.set_default_tensor_type('torch.FloatTensor')
