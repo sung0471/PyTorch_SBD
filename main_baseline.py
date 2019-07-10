@@ -567,7 +567,7 @@ def train(cur_iter, iter_per_epoch, epoch, data_loader, model, criterion, optimi
 
             if i % 10 == 0:
                 batch_time = time.time() - start_time
-                print('Iter:{} Loss_conf:{} avg_acc:{} epoch_acc:{:.10f} lr:{} batch_time:{:.3f}s'.format(
+                print('Iter:{} Loss_conf:{} avg_acc:{:.5f} epoch_acc:{:.9f} lr:{} batch_time:{:.3f}s'.format(
                     i, loss.data, avg_acc, epoch_acc, optimizer.param_groups[0]['lr'], batch_time), flush=True)
                 avg_acc = 0.0
                 start_time = time.time()
@@ -748,7 +748,7 @@ def build_final_model(opt, device):
         # teacher_model_path = 'models/Alexnet-final.pth'
         model = teacher_student_net(opt, device)
     else:
-        model = build_model(opt, opt.phase, device)
+        model = build_model(opt, opt.model, opt.phase, device)
 
     # 19.6.4.
     # remove below lines > opt.model_type = 'new' is not trainable
