@@ -35,15 +35,33 @@ def build_model(opt, model_type, phase, device):
     # 19.6.26.
     # opt.model_type = 'new' 다시 사용
     # benchmark도 전체적으로 적용하여 재시도
-    if opt.cuda and opt.model_type == 'old':
-    # if opt.cuda:
-        torch.backends.benchmark = True
+    # 19.6.28. remove opt.model_type
+    # if opt.cuda and opt.model_type == 'old':
+    if opt.cuda:
+        # `19.6.24. 다시 추가
+        # `19.7.1. 주석 처리
+        # torch.backends.benchmark = True
+
+        # `19.??
+        # Parallel > model.to(device) 순서로 설정
         # `19.5.14.
         # use multi_gpu for training and testing
         model = nn.DataParallel(model, device_ids=range(opt.gpu_num))
+        # `19.7.2.
+        # model.to(device) > model = model.to(device)로 변경
+        model = model.to(device)
         # model.cuda()
-        # model = model.to(device)
-        model.to(device)
+        # model.to(device)
+
+        # `19.6.27.
+        # use model.to(device)>Parallel 순서로 설정
+        # `19.7.2. 주석처리
+        # # model.cuda()
+        # # model = model.to(device)
+        # model.to(device)
+        # # `19.5.14.
+        # # use multi_gpu for training and testing
+        # model = nn.DataParallel(model, device_ids=range(opt.gpu_num))
 
     if phase == 'train':
         # for debug
