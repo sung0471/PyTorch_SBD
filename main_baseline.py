@@ -773,7 +773,7 @@ def main():
     print(torch.__version__)
 
     # 19.5.17 for ubuntu
-    # torch.multiprocessing.set_start_method("spawn")
+    # torch.multiprocessing.set_start_method('spawn')
 
     # 19.5.7 add
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -789,8 +789,9 @@ def main():
     # model generate 시 적용되게 수정
     # 19.7.1.
     # model 완성전에 benchmark 수행하게 설정
-    if torch.cuda.is_available() and opt.cuda:
-        torch.backends.benchmark = True
+    # 19.7.10. 주석처리
+    # if torch.cuda.is_available() and opt.cuda:
+    #     torch.backends.benchmark = True
     
     # ubuntu에서 주석처리해서 > 에러해결
     #     torch.set_default_tensor_type('torch.cuda.FloatTensor')
@@ -809,6 +810,13 @@ def main():
 
     # 위의 라인을 하나의 함수로 통합
     model = build_final_model(opt, device)
+
+    # `19.7.7. add
+    # parallel>benchmark>cuda 순서 적용한 부분 추가
+    # `19.7.10. 주석처리
+    # if torch.cuda.is_available() and opt.cuda:
+    #     torch.backends.benchmark = True
+    #     model=model.to(device)
 
     # iter_per_epoch을 opt.is_full_data와 opt.batch_size에 맞게 자동으로 조정
     if opt.iter_per_epoch == 0:
