@@ -40,7 +40,8 @@ def build_model(opt, model_type, phase, device):
     if opt.cuda:
         # `19.6.24. 다시 추가
         # `19.7.1. 주석 처리
-        # torch.backends.benchmark = True
+        # 19.7.10. benchmark=modelwise 재사용
+        torch.backends.benchmark = True
 
         # `19.??
         # Parallel > model.to(device) 순서로 설정
@@ -49,9 +50,13 @@ def build_model(opt, model_type, phase, device):
         model = nn.DataParallel(model, device_ids=range(opt.gpu_num))
         # `19.7.2.
         # model.to(device) > model = model.to(device)로 변경
-        model = model.to(device)
+        # `19.7.7.
+        # model = model.to(device)를 main_baseline.py로 이동
+        # 19.7.10.
+        # model.inplace를 다시 modelwise로 rollback
         # model.cuda()
         # model.to(device)
+        model = model.to(device)
 
         # `19.6.27.
         # use model.to(device)>Parallel 순서로 설정
