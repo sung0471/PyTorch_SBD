@@ -21,9 +21,9 @@ def parse_opts():
     parser.add_argument('--iter_per_epoch', default=0, type=int, help='if iter=0, adjust automatic, elif iter>0, set this value')
     parser.add_argument('--epoch', default=5, type=int)
     parser.add_argument('--model', default='resnext', type=str, help='alexnet | resnet | resnext')
-    parser.add_argument('--model_type', default='new', type=str, help='old | new'
-                                                                      'old: model>parallel>cuda>train'
-                                                                      'new: model>train>parallel>cuda')
+    # parser.add_argument('--model_type', default='old', type=str, help='old | new'
+    #                                                                   'old: model>parallel>cuda>train'
+    #                                                                   'new: model>train>parallel>cuda')
     parser.add_argument('--alexnet_type', default='origin', type=str, help='origin | dropout')
     parser.add_argument('--pretrained_model', default=True, help='if true, use pretrained model')
     parser.add_argument('--pretrain_path', default='kinetics_pretrained_model/resnext-101-kinetics.pth', type=str, help='Pretrained model (.pth)')
