@@ -590,6 +590,7 @@ def train(cur_iter, iter_per_epoch, epoch, data_loader, model, criterion, optimi
     total_time = time.time() - epoch_time
     total_time = datetime.timedelta(seconds=total_time)
     print("Training Time : {}".format(total_time), flush=True)
+    total_acc.append(str(total_time))
 
     save_file_path = os.path.join(opt.result_dir, 'model_final.pth'.format(opt.checkpoint_path))
     print("save to {}".format(save_file_path), flush=True)
@@ -599,7 +600,7 @@ def train(cur_iter, iter_per_epoch, epoch, data_loader, model, criterion, optimi
     }
     torch.save(states, save_file_path)
 
-    json.dump(total_acc, open(os.path.join(opt.result_dir, 'epoch_accuracy.json'), 'w'))
+    json.dump(total_acc, open(os.path.join(opt.result_dir, 'epoch_accuracy_and_total_time.json'), 'w'))
 
 
 def get_lastest_model(opt):
@@ -734,7 +735,8 @@ def build_final_model(opt, device):
     # 19.6.4 remove
     # is not used
     # 19.6.26 revive
-    assert opt.model_type in ['old', 'new']
+    # 19.6.28 remove
+    # assert opt.model_type in ['old', 'new']
 
     # 19.5.7. add
     # teacher student option add
@@ -752,13 +754,14 @@ def build_final_model(opt, device):
     # remove below lines > opt.model_type = 'new' is not trainable
     # 19.6.26.
     # benchmark를 new type model일 때 전체적으로 적용 > 시도해볼 필요 있음
-    if opt.cuda and opt.model_type == 'new':
-        torch.backends.benchmark = True
-        # use multi_gpu for training and testing
-        model = nn.DataParallel(model, device_ids=range(opt.gpu_num))
-        # model.cuda()
-        # model = model.cuda(device)
-        model.to(device)
+    # 19.6.28. remove
+    # if opt.cuda and opt.model_type == 'new':
+    #     torch.backends.benchmark = True
+    #     # use multi_gpu for training and testing
+    #     model = nn.DataParallel(model, device_ids=range(opt.gpu_num))
+    #     # model.cuda()
+    #     # model = model.cuda(device)
+    #     model.to(device)
 
     print(model)
 
@@ -784,10 +787,12 @@ def main():
     # set default tensor type
     # 19.6.26.
     # model generate 시 적용되게 수정
-    # if torch.cuda.is_available() and opt.cuda:
-    #     torch.backends.benchmark = True
+    # 19.7.1.
+    # model 완성전에 benchmark 수행하게 설정
+    if torch.cuda.is_available() and opt.cuda:
+        torch.backends.benchmark = True
     
-    # ubuntu에서 주석처리 > 에러해결
+    # ubuntu에서 주석처리해서 > 에러해결
     #     torch.set_default_tensor_type('torch.cuda.FloatTensor')
     # else:
     #     torch.set_default_tensor_type('torch.FloatTensor')
