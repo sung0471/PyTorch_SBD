@@ -1,3 +1,8 @@
+import time
+import datetime
+
+epoch_time = time.time()
+
 temporal_length=16
 image_clip=[]
 for i in range(temporal_length -len(image_clip)):
@@ -210,3 +215,12 @@ arr_test = torch.Tensor([[1,2,3,4],[9,10,11,12],[5,6,7,8]])
 _, predict = arr_test.topk(1,1,True)
 predict = predict.t()
 print(predict, type(predict), predict.size())
+
+total_acc = [0.0] * 5
+for i in range(len(total_acc)):
+    total_acc[i] = 95.0 + i*0.2
+total_time = time.time() - epoch_time
+total_time = datetime.timedelta(seconds=total_time)
+print("Training Time : {}".format(total_time), flush=True)
+total_acc.append(str(total_time))
+json.dump(total_acc, open('epoch_accuracy_test.json', 'w'))
