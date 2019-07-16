@@ -25,7 +25,7 @@ def generate_model(opt, model_type):
                                   sample_size=opt.sample_size, sample_duration=opt.sample_duration)
     elif model_type == 'detector':
         model = detector.resnet101(num_classes=opt.n_classes,
-                                  sample_size=opt.sample_size, sample_duration=opt.sample_duration)
+                                  sample_size=opt.sample_size, sample_duration=opt.sample_duration, use_depthwise=True)
     else:
         raise Exception("Unknown model name")
 
