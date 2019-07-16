@@ -35,7 +35,7 @@ class ResNeXtBottleneck(nn.Module):
 
     def __init__(self, inplanes, planes, cardinality, stride=1, downsample=None):
         super(ResNeXtBottleneck, self).__init__()
-        mid_planes = cardinality * int(planes / 32)
+        mid_planes = cardinality * int(planes / cardinality)
         self.conv1 = nn.Conv3d(inplanes, mid_planes, kernel_size=1, bias=False)
         self.bn1 = nn.BatchNorm3d(mid_planes)
         self.conv2 = nn.Conv3d(mid_planes, mid_planes, kernel_size=3, stride=stride,
@@ -199,22 +199,25 @@ def resnet152(**kwargs):
     model = ResNeXt(ResNeXtBottleneck, [3, 8, 36, 3], **kwargs)
     return model
 
+
 if __name__ == '__main__':
     net = resnet101(num_classes=3, sample_size=128, sample_duration=16)
     print(net)
     print("net length : ", len(list(net.children())))
 
-    base_file = '../kinetics_pretrained_model/resnext-101-kinetics.pth'
-    # pretrained 꺼 다 불러옴
-    pretrained = torch.load(base_file, map_location=lambda storage, loc: storage)['state_dict']
-    print(pretrained.keys())
-    # pretrained의 key 맨 앞의 'module.'을 제거
-    pretrained = {"{}".format(s[7:]): v for s, v in pretrained.items()}
-    print(pretrained.keys())
-    # fc 빼고 모든 weight, bias를 대입
-    current_param = net.state_dict()
-    pretrained = {k: v for k, v in pretrained.items() if k in current_param and k[:2] != 'fc'}
-    print(pretrained.keys())
-    # current_param에 update함
-    current_param.update(pretrained)
-    print(current_param.keys())
+    check_pretrained = False
+    if check_pretrained:
+        base_file = '../kinetics_pretrained_model/resnext-101-kinetics.pth'
+        # pretrained 꺼 다 불러옴
+        pretrained = torch.load(base_file, map_location=lambda storage, loc: storage)['state_dict']
+        print(pretrained.keys())
+        # pretrained의 key 맨 앞의 'module.'을 제거
+        pretrained = {"{}".format(s[7:]): v for s, v in pretrained.items()}
+        print(pretrained.keys())
+        # fc 빼고 모든 weight, bias를 대입
+        current_param = net.state_dict()
+        pretrained = {k: v for k, v in pretrained.items() if k in current_param and k[:2] != 'fc'}
+        print(pretrained.keys())
+        # current_param에 update함
+        current_param.update(pretrained)
+        print(current_param.keys())
