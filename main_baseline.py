@@ -35,7 +35,7 @@ def get_mean(norm_value=255):
 
 
 def get_label(res_tensor):
-    res_numpy=res_tensor.data.cpu().numpy()
+    res_numpy=res_tensor.clone().detach().cpu().numpy()
     labels=[]
     for row in res_numpy:
         labels.append(np.argmax(row))
@@ -204,7 +204,7 @@ def test(video_path, test_data_loader, model, device, opt):
             #     results = results[1]
 
             labels += get_label(results)
-            boundary = boundary.data.numpy()
+            boundary = boundary.clone().detach().numpy()
             for _ in boundary:
                 frame_pos.append(int(_+1))
 
@@ -490,7 +490,7 @@ def calculate_accuracy(outputs, targets):
     _, pred = outputs.topk(1, 1, True)
     pred = pred.t()
     correct = pred.eq(targets.view(1, -1))
-    n_correct_elems = correct.float().sum().data
+    n_correct_elems = correct.float().sum().clone().detach()
 
     return n_correct_elems / batch_size
 
@@ -561,14 +561,14 @@ def train(cur_iter, iter_per_epoch, epoch, data_loader, model, criterion, optimi
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
-            scheduler.step(loss.data)
+            scheduler.step(loss.item())
 
             i += 1
 
             if i % 10 == 0:
                 batch_time = time.time() - start_time
                 print('Iter:{} Loss_conf:{} avg_acc:{:.5f} epoch_acc:{:.9f} lr:{} batch_time:{:.3f}s'.format(
-                    i, loss.data, avg_acc, epoch_acc, optimizer.param_groups[0]['lr'], batch_time), flush=True)
+                    i, loss.item(), avg_acc, epoch_acc, optimizer.param_groups[0]['lr'], batch_time), flush=True)
                 avg_acc = 0.0
                 start_time = time.time()
 
