@@ -2,8 +2,35 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.autograd import Variable
-from models import generate_model
+from models import *
 import os
+
+
+# 19.6.26.
+# add parameter=model_type instead opt.model
+# 19.7.16.
+# moved from models/__init__.py
+def generate_model(opt, model_type):
+    assert model_type in ['resnet', 'alexnet', 'resnext', 'detector']
+    assert opt.alexnet_type in ['origin', 'dropout']
+
+    if model_type == 'alexnet':
+        model = deepSBD.deepSBD(model_type=opt.alexnet_type)
+    elif model_type == 'resnet':
+        from models.resnet import get_fine_tuning_parameters
+
+        model = resnet.resnet18(num_classes=opt.n_classes,
+                                sample_size=opt.sample_size, sample_duration=opt.sample_duration)
+    elif model_type == 'resnext':
+        model = resnext.resnet101(num_classes=opt.n_classes,
+                                  sample_size=opt.sample_size, sample_duration=opt.sample_duration)
+    elif model_type == 'detector':
+        model = detector.resnet101(num_classes=opt.n_classes,
+                                  sample_size=opt.sample_size, sample_duration=opt.sample_duration, use_depthwise=True)
+    else:
+        raise Exception("Unknown model name")
+
+    return model
 
 
 # 19.6.26.
