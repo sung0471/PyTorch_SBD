@@ -16,8 +16,8 @@ import time
 import datetime
 
 from lib.utils import AverageMeter, calculate_accuracy
-from module.teacher_student_module import TeacherStudentModule
-from module.multiloss import multiloss
+from modules.teacher_student_module import TeacherStudentModule
+from modules.multiloss import multiloss
 from model_cls import build_model
 
 import cv2
