@@ -224,3 +224,21 @@ total_time = datetime.timedelta(seconds=total_time)
 print("Training Time : {}".format(total_time), flush=True)
 total_acc.append(str(total_time))
 json.dump(total_acc, open('epoch_accuracy_test.json', 'w'))
+
+from lib.spatial_transforms import *
+video_path = os.path.join(root_dir, video_name_list[0])
+print(video_path)
+video_cap = cv2.VideoCapture(video_path)
+video = list()
+spatial_transform = get_test_spatial_transform(opt)
+for i in range(8):
+    status, frame = video_cap.read()
+    if not status:
+        break
+    else:
+        hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
+        frame = Image.fromarray(hsv, 'HSV')
+        frame = spatial_transform(frame)
+        video.append(frame)
+video = torch.stack(video, 0)
+print(torch.Tensor.size(video))
