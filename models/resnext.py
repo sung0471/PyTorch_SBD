@@ -6,7 +6,7 @@ import math
 from functools import partial
 import os
 
-__all__ = ['ResNeXt', 'resnet50', 'resnet101']
+__all__ = ['ResNeXt', 'resnext50', 'resnext101']
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
@@ -71,19 +71,18 @@ class ResNeXtBottleneck(nn.Module):
 
 
 class ResNeXt(nn.Module):
-    def __init__(self, block, layers, sample_size, sample_duration, shortcut_type='B',
-                 cardinality=32, num_classes=400):
+    def __init__(self, block, layers, sample_size, sample_duration, shortcut_type='B', cardinality=32, num_classes=400):
         self.inplanes = 64
         super(ResNeXt, self).__init__()
         self.conv1 = nn.Conv3d(3, 64, kernel_size=7, stride=(1, 2, 2),
                                padding=(3, 3, 3), bias=False)
         self.bn1 = nn.BatchNorm3d(64)
         self.relu = nn.ReLU(inplace=True)
-        self.maxpool = nn.MaxPool3d(kernel_size=(3, 3, 3), stride=2, padding=1)
+        self.maxpool = nn.MaxPool3d(kernel_size=(3, 3, 3), stride=(2, 2, 2), padding=1)
         self.layer1 = self._make_layer(block, 128, layers[0], shortcut_type, cardinality)
-        self.layer2 = self._make_layer(block, 256, layers[1], shortcut_type, cardinality, stride=2)
-        self.layer3 = self._make_layer(block, 512, layers[2], shortcut_type, cardinality, stride=2)
-        self.layer4 = self._make_layer(block, 1024, layers[3], shortcut_type, cardinality, stride=2)
+        self.layer2 = self._make_layer(block, 256, layers[1], shortcut_type, cardinality, stride=(2, 2, 2))
+        self.layer3 = self._make_layer(block, 512, layers[2], shortcut_type, cardinality, stride=(2, 2, 2))
+        self.layer4 = self._make_layer(block, 1024, layers[3], shortcut_type, cardinality, stride=(2, 2, 2))
         last_duration = int(math.ceil(sample_duration / 16))
         last_size = int(math.ceil(sample_size / 32))
         self.avgpool = nn.AvgPool3d((last_duration, last_size, last_size), stride=1)
@@ -179,21 +178,21 @@ def get_fine_tuning_parameters(model, ft_begin_index):
     return parameters
 
 
-def resnet50(**kwargs):
+def resnext50(**kwargs):
     """Constructs a ResNet-50 model.
     """
     model = ResNeXt(ResNeXtBottleneck, [3, 4, 6, 3], **kwargs)
     return model
 
 
-def resnet101(**kwargs):
+def resnext101(**kwargs):
     """Constructs a ResNet-101 model.
     """
     model = ResNeXt(ResNeXtBottleneck, [3, 4, 23, 3], **kwargs)
     return model
 
 
-def resnet152(**kwargs):
+def resnext152(**kwargs):
     """Constructs a ResNet-101 model.
     """
     model = ResNeXt(ResNeXtBottleneck, [3, 8, 36, 3], **kwargs)
@@ -201,7 +200,7 @@ def resnet152(**kwargs):
 
 
 if __name__ == '__main__':
-    net = resnet101(num_classes=3, sample_size=128, sample_duration=16)
+    net = resnext101(num_classes=3, sample_size=128, sample_duration=16)
     print(net)
     print("net length : ", len(list(net.children())))
 
