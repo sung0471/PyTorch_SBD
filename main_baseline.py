@@ -3,23 +3,22 @@
 import os
 import json
 from torch import nn
+from torch.autograd import Variable
 from torch import optim
-import sys
+from torch.optim import lr_scheduler
 
 from opts import parse_opts
 from lib.spatial_transforms import *
 
 from data.train_data_loader import DataSet as train_DataSet
 from data.test_data_loader import DataSet as test_DataSet
-from cls import build_model
-from models.teacher_student_net import teacher_student_net
 import time
 import datetime
 
 from lib.utils import AverageMeter, calculate_accuracy
-from torch.autograd import Variable
-from torch.optim import lr_scheduler
-from lib.multiloss import multiloss
+from modules.teacher_student_module import TeacherStudentModule
+from modules.multiloss import multiloss
+from model_cls import build_model
 
 import cv2
 import pickle
@@ -35,7 +34,7 @@ def get_mean(norm_value=255):
 
 
 def get_label(res_tensor):
-    res_numpy=res_tensor.data.cpu().numpy()
+    res_numpy=res_tensor.clone().detach().cpu().numpy()
     labels=[]
     for row in res_numpy:
         labels.append(np.argmax(row))
@@ -204,7 +203,7 @@ def test(video_path, test_data_loader, model, device, opt):
             #     results = results[1]
 
             labels += get_label(results)
-            boundary = boundary.data.numpy()
+            boundary = boundary.clone().detach().numpy()
             for _ in boundary:
                 frame_pos.append(int(_+1))
 
@@ -490,7 +489,7 @@ def calculate_accuracy(outputs, targets):
     _, pred = outputs.topk(1, 1, True)
     pred = pred.t()
     correct = pred.eq(targets.view(1, -1))
-    n_correct_elems = correct.float().sum().data
+    n_correct_elems = correct.float().sum().clone().detach()
 
     return n_correct_elems / batch_size
 
@@ -540,12 +539,17 @@ def train(cur_iter, iter_per_epoch, epoch, data_loader, model, criterion, optimi
             #     inputs = inputs.cuda(async=True)
 
             # 19.3.8. revision
-            if opt.cuda:
-                targets = targets.cuda(device, non_blocking=True)
-                inputs = inputs.cuda(device, non_blocking=True)
+            # 19.7.16
+            # .cuda > .to
+            # with torch.no_grad() for target
+            # remove 'if opt.cuda:'
+            inputs = inputs.to(device, non_blocking=True)
+            with torch.no_grad():
+                targets = targets.to(device, non_blocking=True)
 
-            targets = Variable(targets)
-            inputs = Variable(inputs)
+            # 19.7.16. no use
+            # targets = Variable(targets)
+            # inputs = Variable(inputs)
 
             outputs = model(inputs)
 
@@ -561,14 +565,14 @@ def train(cur_iter, iter_per_epoch, epoch, data_loader, model, criterion, optimi
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
-            scheduler.step(loss.data)
+            scheduler.step(loss.item())
 
             i += 1
 
             if i % 10 == 0:
                 batch_time = time.time() - start_time
                 print('Iter:{} Loss_conf:{} avg_acc:{:.5f} epoch_acc:{:.9f} lr:{} batch_time:{:.3f}s'.format(
-                    i, loss.data, avg_acc, epoch_acc, optimizer.param_groups[0]['lr'], batch_time), flush=True)
+                    i, loss.item(), avg_acc, epoch_acc, optimizer.param_groups[0]['lr'], batch_time), flush=True)
                 avg_acc = 0.0
                 start_time = time.time()
 
@@ -659,7 +663,7 @@ def train_misaeng(opt, device, model):
     # # use multi_gpu for training and testing
     # model = nn.DataParallel(model, device_ids=range(opt.gpu_num))
     #
-    # # `19.5.16. : from cls.py to main_baseline.py
+    # # `19.5.16. : from model_cls.py to main_baseline.py
     # # `19.3.8
     # # model = model.cuda(device)
     # if opt.cuda:
@@ -697,9 +701,12 @@ def train_misaeng(opt, device, model):
     else:
         criterion = nn.CrossEntropyLoss()
 
-    # 19.3.8 revision
-    if opt.cuda:
-        criterion = criterion.to(device)
+    # 19.3.8. revision
+    # add 'if opt.no_cuda:'
+    # 19.7.16. revision
+    # remove 'if opt.cuda:
+    # if opt.cuda:
+    criterion = criterion.to(device)
 
     if opt.train:
         spatial_transform = get_train_spatial_transform(opt)
@@ -746,7 +753,7 @@ def build_final_model(opt, device):
         # because use opt.teacher_model_path
 
         # teacher_model_path = 'models/Alexnet-final.pth'
-        model = teacher_student_net(opt, device)
+        model = TeacherStudentModule(opt, device)
     else:
         model = build_model(opt, opt.model, opt.phase, device)
 

@@ -1,14 +1,14 @@
-from models.deepSBD import *
+import torch
+import torch.nn as nn
 from opts import parse_opts
-from cls import build_model
-import os
+from model_cls import build_model
 
 
-class teacher_student_net(nn.Module):
+class TeacherStudentModule(nn.Module):
     def __init__(self, opt, device):
         self.phase = opt.phase
         # self.device = device
-        super(teacher_student_net, self).__init__()
+        super(TeacherStudentModule, self).__init__()
 
         # 19.6.26.
         # opt.model = '' > 주석처리
@@ -36,13 +36,13 @@ class teacher_student_net(nn.Module):
 
     def load_checkpoint(self, model, path):
         checkpoint = torch.load(path)
-        model.load_state_dict(checkpoint['state_dict'], strict=False)
+        model.load_state_dict(checkpoint['state_dict'], strict=True)
 
 
 if __name__ == '__main__':
     opt = parse_opts()
     opt.pretrain_path = '../kinetics_pretrained_model/resnext-101-kinetics.pth'
-    teacher_model_path = 'Alexnet-final.pth'
+    opt.teacher_model_path = 'Alexnet-final.pth'
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    model = teacher_student_net(opt, teacher_model_path, device)
+    model = TeacherStudentModule(opt, device)
     print(model)
