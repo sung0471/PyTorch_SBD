@@ -6,24 +6,9 @@ import math
 from functools import partial
 import os
 
-__all__ = ['ResNeXt', 'resnet50', 'resnet101']
+__all__ = ['ResNeXt', 'resnext50', 'resnext101']
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-
-
-class Depthwise_Separable_Conv3d(nn.Module):
-    def __init__(self, in_planes, out_planes, kernel_size=(3, 3, 3), stride=(1, 1, 1), padding=(1, 1, 1), bias=False):
-        super(Depthwise_Separable_Conv3d, self).__init__()
-
-        self.channelwise = nn.Conv3d(in_planes, in_planes, kernel_size=kernel_size, stride=stride, padding=padding,
-                                     groups=in_planes, bias=bias)
-        self.pointwise = nn.Conv3d(in_planes, out_planes, kernel_size=1, stride=1, padding=0, bias=bias)
-
-    def forward(self, x):
-        x = self.channelwise(x)
-        x = self.pointwise(x)
-
-        return x
 
 
 def conv3x3x3(in_planes, out_planes, stride=1):
@@ -45,20 +30,43 @@ def downsample_basic_block(x, planes, stride):
     return out
 
 
+class DepthwiseSeparableConv3d(nn.Module):
+    def __init__(self, in_planes, out_planes, kernel_size=(3, 3, 3), stride=(1, 1, 1), padding=(1, 1, 1), bias=False):
+        super(DepthwiseSeparableConv3d, self).__init__()
+
+        self.channelwise = nn.Conv3d(in_planes, in_planes, kernel_size=kernel_size, stride=stride, padding=padding,
+                                     groups=in_planes, bias=bias)
+        # self.bn1 = nn.BatchNorm3d(in_planes)
+        # self.pointwise = nn.Conv3d(in_planes, out_planes, kernel_size=1, stride=1, padding=0, bias=bias)
+        # self.bn2 = nn.BatchNorm3d(out_planes)
+        # self.relu = nn.ReLU(inplace=True)
+
+    def forward(self, x):
+        x = self.channelwise(x)
+        # x = self.bn1(x)
+        # x = self.relu(x)
+        # x = self.pointwise(x)
+        # x = self.bn2(x)
+        # x = self.relu(x)
+
+        return x
+
+
 class ResNeXtBottleneck(nn.Module):
     expansion = 2
 
     def __init__(self, inplanes, planes, cardinality, stride=1, downsample=None, use_depthwise=False):
         super(ResNeXtBottleneck, self).__init__()
+        if use_depthwise:
+            cardinality = planes
+
         mid_planes = cardinality * int(planes / cardinality)
         self.conv1 = nn.Conv3d(inplanes, mid_planes, kernel_size=1, bias=False)
         self.bn1 = nn.BatchNorm3d(mid_planes)
-        if use_depthwise:
-            self.conv2 = nn.Conv3d(mid_planes, mid_planes, kernel_size=3, stride=stride,
-                                   padding=1, groups=mid_planes, bias=False)
-        else:
-            self.conv2 = nn.Conv3d(mid_planes, mid_planes, kernel_size=3, stride=stride,
-                                   padding=1, groups=cardinality, bias=False)
+        # self.conv2 = DepthwiseSeparableConv3d(mid_planes, mid_planes,  kernel_size=3, stride=stride,
+        #                                       padding=1, bias=False)
+        self.conv2 = nn.Conv3d(mid_planes, mid_planes, kernel_size=3, stride=stride,
+                               padding=1, groups=cardinality, bias=False)
         self.bn2 = nn.BatchNorm3d(mid_planes)
         self.conv3 = nn.Conv3d(mid_planes, planes * self.expansion, kernel_size=1, bias=False)
         self.bn3 = nn.BatchNorm3d(planes * self.expansion)
@@ -93,20 +101,16 @@ class ResNeXt(nn.Module):
     def __init__(self, block, layers, sample_size, sample_duration, shortcut_type='B',
                  cardinality=32, num_classes=400, use_depthwise=False):
         self.inplanes = 64
+        self.use_depthwise = use_depthwise
         super(ResNeXt, self).__init__()
-        if use_depthwise:
-            self.conv1 = Depthwise_Separable_Conv3d(3, 64, kernel_size=7, stride=(1, 2, 2),
-                                                    padding=(3, 3, 3), bias=False)
-        else:
-            self.conv1 = nn.Conv3d(3, 64, kernel_size=7, stride=(1, 2, 2),
-                                   padding=(3, 3, 3), bias=False)
+        self.conv1 = nn.Conv3d(3, 64, kernel_size=7, stride=(1, 2, 2), padding=(3, 3, 3), bias=False)
         self.bn1 = nn.BatchNorm3d(64)
         self.relu = nn.ReLU(inplace=True)
         self.maxpool = nn.MaxPool3d(kernel_size=(3, 3, 3), stride=(2, 2, 2), padding=1)
-        self.layer1 = self._make_layer(block, 128, layers[0], shortcut_type, cardinality, use_depthwise=use_depthwise)
-        self.layer2 = self._make_layer(block, 256, layers[1], shortcut_type, cardinality, stride=(2, 2, 2), use_depthwise=use_depthwise)
-        self.layer3 = self._make_layer(block, 512, layers[2], shortcut_type, cardinality, stride=(2, 2, 2), use_depthwise=use_depthwise)
-        self.layer4 = self._make_layer(block, 1024, layers[3], shortcut_type, cardinality, stride=(2, 2, 2), use_depthwise=use_depthwise)
+        self.layer1 = self._make_layer(block, 128, layers[0], shortcut_type, cardinality)
+        self.layer2 = self._make_layer(block, 256, layers[1], shortcut_type, cardinality, stride=(2, 2, 2))
+        self.layer3 = self._make_layer(block, 512, layers[2], shortcut_type, cardinality, stride=(2, 2, 2))
+        self.layer4 = self._make_layer(block, 1024, layers[3], shortcut_type, cardinality, stride=(2, 2, 2))
         last_duration = int(math.ceil(sample_duration / 16))
         last_size = int(math.ceil(sample_size / 32))
         self.avgpool = nn.AvgPool3d((last_duration, last_size, last_size), stride=1)  # 1
@@ -120,7 +124,7 @@ class ResNeXt(nn.Module):
                 m.bias.data.zero_()
                 # m.eval()
 
-    def _make_layer(self, block, planes, blocks, shortcut_type, cardinality, stride=(1, 1, 1), use_depthwise=False):
+    def _make_layer(self, block, planes, blocks, shortcut_type, cardinality, stride=(1, 1, 1)):
         downsample = None
         if stride != 1 or self.inplanes != planes * block.expansion:
             if shortcut_type == 'A':
@@ -137,10 +141,10 @@ class ResNeXt(nn.Module):
                 )
 
         layers = list()
-        layers.append(block(self.inplanes, planes, cardinality, stride, downsample, use_depthwise=use_depthwise))
+        layers.append(block(self.inplanes, planes, cardinality, stride, downsample, use_depthwise=self.use_depthwise))
         self.inplanes = planes * block.expansion
         for i in range(1, blocks):
-            layers.append(block(self.inplanes, planes, cardinality, use_depthwise=use_depthwise))
+            layers.append(block(self.inplanes, planes, cardinality, use_depthwise=self.use_depthwise))
 
         return nn.Sequential(*layers)
 
@@ -202,21 +206,21 @@ def get_fine_tuning_parameters(model, ft_begin_index):
     return parameters
 
 
-def resnet50(**kwargs):
+def resnext50(**kwargs):
     """Constructs a ResNet-50 model.
     """
     model = ResNeXt(ResNeXtBottleneck, [3, 4, 6, 3], **kwargs)
     return model
 
 
-def resnet101(**kwargs):
+def resnext101(**kwargs):
     """Constructs a ResNet-101 model.
     """
     model = ResNeXt(ResNeXtBottleneck, [3, 4, 23, 3], **kwargs)
     return model
 
 
-def resnet152(**kwargs):
+def resnext152(**kwargs):
     """Constructs a ResNet-101 model.
     """
     model = ResNeXt(ResNeXtBottleneck, [3, 8, 36, 3], **kwargs)
@@ -224,6 +228,6 @@ def resnet152(**kwargs):
 
 
 if __name__ == '__main__':
-    net = resnet101(num_classes=3, sample_size=128, sample_duration=16, use_depthwise=True)
+    net = resnext101(num_classes=3, sample_size=128, sample_duration=16, use_depthwise=True)
     print(net)
     print("net length : ", len(list(net.children())))
