@@ -3,6 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.autograd import Variable
 from models import *
+from thop import profile
 import os
 
 
@@ -12,9 +13,9 @@ import os
 # moved from models/__init__.py
 def generate_model(opt, model_type):
     assert model_type in ['resnet', 'alexnet', 'resnext', 'detector']
-    assert opt.alexnet_type in ['origin', 'dropout']
 
     if model_type == 'alexnet':
+        assert opt.alexnet_type in ['origin', 'dropout']
         model = deepSBD.deepSBD(model_type=opt.alexnet_type)
     elif model_type == 'resnet':
         from models.resnet import get_fine_tuning_parameters
@@ -22,13 +23,17 @@ def generate_model(opt, model_type):
         model = resnet.resnet18(num_classes=opt.n_classes,
                                 sample_size=opt.sample_size, sample_duration=opt.sample_duration)
     elif model_type == 'resnext':
-        model = resnext.resnet101(num_classes=opt.n_classes,
-                                  sample_size=opt.sample_size, sample_duration=opt.sample_duration)
+        model = resnext.resnext101(num_classes=opt.n_classes,
+                                   sample_size=opt.sample_size, sample_duration=opt.sample_duration)
     elif model_type == 'detector':
-        model = detector.resnet101(num_classes=opt.n_classes,
-                                  sample_size=opt.sample_size, sample_duration=opt.sample_duration, use_depthwise=True)
+        model = detector.resnext101(num_classes=opt.n_classes,
+                                    sample_size=opt.sample_size, sample_duration=opt.sample_duration, use_depthwise=True)
     else:
         raise Exception("Unknown model name")
+
+    for_test_tensor = torch.randn(opt.batch_size, 3, opt.sample_duration, opt.sample_size, opt.sample_size)
+    flops, params = profile(model, inputs=(for_test_tensor,))
+    print('Model : {}, (FLOPS: {}, Params: {})'.format(model_type, flops, params))
 
     return model
 
