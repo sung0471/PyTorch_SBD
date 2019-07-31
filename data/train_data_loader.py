@@ -18,21 +18,23 @@ def pil_loader(path):
             return img.convert('RGB')
 
 
-def video_loader(video_path, video_dir_path, frame_indices,sample_duration,img=False):
-    video = []
+def video_loader(video_path, video_dir_path, frame_indices, sample_duration, img=False):
+    video = list()
     try:
         if not img:
             # 19.4.15. add
             # use video_dir_path
             if video_dir_path is None:
-                video_cap=cv2.VideoCapture(video_path)
+                video_cap = cv2.VideoCapture(video_path)
             else:
                 video_cap = cv2.VideoCapture(os.path.join(video_dir_path, video_path))
-            video_cap.set(1,frame_indices)
+            video_cap.set(1, frame_indices)
             for i in range(sample_duration):
-                status,frame=video_cap.read()
+                status, frame = video_cap.read()
                 if status:
-                    frame=Image.fromarray(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)).convert('RGB')
+                    # 19.7.31. add HSV version
+                    # frame = Image.fromarray(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)).convert('RGB')
+                    frame = Image.fromarray(cv2.cvtColor(frame, cv2.COLOR_BGR2HSV), 'HSV')
                     video.append(frame)
                 else:
                     break
@@ -46,8 +48,8 @@ def get_default_video_loader():
 
 
 def make_dataset(root_path, video_list_path, sample_duration, opt):
-    video_list=[]
-    info={}
+    video_list = list()
+    info = dict()
     with open(video_list_path, 'r') as f:
         for line in f.readlines():
             words = line.split(' ')
@@ -99,14 +101,14 @@ class DataSet(data.Dataset):
         self.weights = self.make_weights()
     
     def make_weights(self):
-        labels_cnt={}
+        labels_cnt = dict()
         for img_info in self.video_list:
             label = img_info['label']
             if label not in labels_cnt:
                 labels_cnt[label] = 0
             labels_cnt[label] += 1
 
-        weights = []
+        weights = list()
         for img_info in self.video_list:
             label = img_info['label']
             weights.append(1.0/labels_cnt[label])

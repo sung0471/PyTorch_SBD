@@ -16,7 +16,7 @@ from models.squeezenet import SqueezeNetFeature
 def no_candidate_frame_pos(root_dir, video_name, sample_duration):
     video_dir = os.path.join(root_dir, video_name)
 
-    frame_index_list = []
+    frame_index_list = list()
     # input video (cv2)
     cap = cv2.VideoCapture(video_dir)
     total_frame = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
@@ -37,7 +37,7 @@ def pil_loader(path):
 
 
 def video_loader(video_path, frame_pos, sample_duration, img=False):
-    video = []
+    video = list()
     try:
         if not img:
             video_cap = cv2.VideoCapture(video_path)
@@ -47,7 +47,9 @@ def video_loader(video_path, frame_pos, sample_duration, img=False):
                 if not status:
                     break
                 else:
-                    frame = Image.fromarray(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)).convert('RGB')
+                    # 19.7.31. add HSV version
+                    # frame = Image.fromarray(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)).convert('RGB')
+                    frame = Image.fromarray(cv2.cvtColor(frame, cv2.COLOR_BGR2HSV), 'HSV')
                     video.append(frame)
             video += [video[-1] for _ in range(sample_duration - len(video))]
 
@@ -62,7 +64,7 @@ def get_default_video_loader():
 
 def make_clip_list(video_root, video_name, sample_duration, candidate):
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    video_list=[]
+    video_list = list()
     if candidate:
         model = SqueezeNetFeature()
         frame_index_list, total_frame, fps = candidate_extraction(video_root, video_name, model, adjacent=True)
@@ -87,9 +89,9 @@ def make_dataset(video_root, video_name_list, sample_duration, candidate):
         video_list, total_frame, fps = make_clip_list(video_root, video_name_list, sample_duration, candidate)
         return video_list, total_frame, fps
     else:
-        video_all_list = []
-        video_length_list = []
-        video_fps_list = []
+        video_all_list = list()
+        video_length_list = list()
+        video_fps_list = list()
         for video_name in video_name_list:
             video_list, total_frame, fps = make_clip_list(video_root, video_name, sample_duration, candidate)
             video_all_list += video_list
