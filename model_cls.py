@@ -5,6 +5,7 @@ from torch.autograd import Variable
 from models import *
 from thop import profile
 import os
+import copy
 
 
 # 19.6.26.
@@ -31,8 +32,11 @@ def generate_model(opt, model_type):
     else:
         raise Exception("Unknown model name")
 
+    # 19.7.31. add deepcopy
+    test_model = copy.deepcopy(model)
+
     for_test_tensor = torch.randn(opt.batch_size, 3, opt.sample_duration, opt.sample_size, opt.sample_size)
-    flops, params = profile(model, inputs=(for_test_tensor,))
+    flops, params = profile(test_model, inputs=(for_test_tensor,))
     print('Model : {}, (FLOPS: {}, Params: {})'.format(model_type, flops, params))
 
     return model
@@ -53,8 +57,8 @@ def build_model(opt, model_type, phase, device):
     # model=gradual_cls(opt.sample_duration,opt.sample_size,opt.sample_size,model,num_classes)
     # print(model)
     if opt.pretrained_model:
-        print("use pretrained model")
         if phase == 'train' and opt.pretrain_path:
+            print("use pretrained model")
             model.load_weights(opt.pretrain_path)
     else:
         print("no pretrained model")
