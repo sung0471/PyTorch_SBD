@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 from opts import parse_opts
 from model_cls import build_model
+import os
 
 
 class TeacherStudentModule(nn.Module):
@@ -11,7 +12,7 @@ class TeacherStudentModule(nn.Module):
         super(TeacherStudentModule, self).__init__()
 
         # 19.6.26.
-        # opt.model = '' > 주석처리
+        # opt.model = '모델명' > 주석처리
         # opt.teacher_model과 opt.model을 parameter로 삽입
 
         # opt.model = 'alexnet'
@@ -36,13 +37,13 @@ class TeacherStudentModule(nn.Module):
 
     def load_checkpoint(self, model, path):
         checkpoint = torch.load(path)
-        model.load_state_dict(checkpoint['state_dict'], strict=True)
+        model.load_state_dict(checkpoint['state_dict'])
 
 
 if __name__ == '__main__':
     opt = parse_opts()
-    opt.pretrain_path = '../kinetics_pretrained_model/resnext-101-kinetics.pth'
-    opt.teacher_model_path = 'Alexnet-final.pth'
+    opt.pretrain_path = os.path.join('../', opt.pretrain_path)
+    opt.teacher_model_path = os.path.join('../', opt.teacher_model_path)
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     model = TeacherStudentModule(opt, device)
     print(model)
