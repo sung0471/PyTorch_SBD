@@ -112,11 +112,11 @@ class ResNet(nn.Module):
                                padding=(3, 3, 3), bias=False)
         self.bn1 = nn.BatchNorm3d(64)
         self.relu = nn.ReLU(inplace=True)
-        self.maxpool = nn.MaxPool3d(kernel_size=(3, 3, 3), stride=2, padding=1)
+        self.maxpool = nn.MaxPool3d(kernel_size=(3, 3, 3), stride=(2, 2, 2), padding=1)
         self.layer1 = self._make_layer(block, 64, layers[0], shortcut_type)
-        self.layer2 = self._make_layer(block, 128, layers[1], shortcut_type, stride=2)
-        self.layer3 = self._make_layer(block, 256, layers[2], shortcut_type, stride=2)
-        self.layer4 = self._make_layer(block, 512, layers[3], shortcut_type, stride=2)
+        self.layer2 = self._make_layer(block, 128, layers[1], shortcut_type, stride=(2, 2, 2))
+        self.layer3 = self._make_layer(block, 256, layers[2], shortcut_type, stride=(2, 2, 2))
+        self.layer4 = self._make_layer(block, 512, layers[3], shortcut_type, stride=(2, 2, 2))
         last_duration = math.ceil(sample_duration / 16)
         last_size = math.ceil(sample_size / 32)
         self.avgpool = nn.AvgPool3d((last_duration, last_size, last_size), stride=1)
@@ -131,7 +131,7 @@ class ResNet(nn.Module):
                 m.bias.data.zero_()
                 m.eval()
 
-    def _make_layer(self, block, planes, blocks, shortcut_type, stride=1):
+    def _make_layer(self, block, planes, blocks, shortcut_type, stride=(1, 1, 1)):
         downsample = None
         if stride != 1 or self.inplanes != planes * block.expansion:
             if shortcut_type == 'A':
@@ -176,7 +176,6 @@ class ResNet(nn.Module):
 
         x = self.conv1(x)
         x = self.bn1(x)
-
         x = self.relu(x)
         x = self.maxpool(x)
 
@@ -230,6 +229,23 @@ def get_fine_tuning_parameters(model, ft_begin_index):
     return parameters
 
 
+def get_resnet(depth, **kwargs):
+    assert depth in [10, 18, 34, 50, 101, 152, 200]
+    if depth == 10:
+        return resnet34(**kwargs)
+    elif depth == 18:
+        return resnet18(**kwargs)
+    elif depth == 34:
+        return resnet34(**kwargs)
+    elif depth == 50:
+        return resnet50(**kwargs)
+    elif depth == 101:
+        return resnet101(**kwargs)
+    elif depth == 152:
+        return resnet152(**kwargs)
+    elif depth == 200:
+        return resnet200(**kwargs)
+
 
 def resnet10(**kwargs):
     """Constructs a ResNet-18 model.
@@ -237,11 +253,13 @@ def resnet10(**kwargs):
     model = ResNet(BasicBlock, [1, 1, 1, 1], **kwargs)
     return model
 
+
 def resnet18(**kwargs):
     """Constructs a ResNet-18 model.
     """
     model = ResNet(BasicBlock, [2, 2, 2, 2], **kwargs)
     return model
+
 
 def resnet34(**kwargs):
     """Constructs a ResNet-34 model.
@@ -249,11 +267,13 @@ def resnet34(**kwargs):
     model = ResNet(BasicBlock, [3, 4, 6, 3], **kwargs)
     return model
 
+
 def resnet50(**kwargs):
     """Constructs a ResNet-50 model.
     """
     model = ResNet(Bottleneck, [3, 4, 6, 3], **kwargs)
     return model
+
 
 def resnet101(**kwargs):
     """Constructs a ResNet-101 model.
@@ -261,11 +281,13 @@ def resnet101(**kwargs):
     model = ResNet(Bottleneck, [3, 4, 23, 3], **kwargs)
     return model
 
+
 def resnet152(**kwargs):
     """Constructs a ResNet-101 model.
     """
     model = ResNet(Bottleneck, [3, 8, 36, 3], **kwargs)
     return model
+
 
 def resnet200(**kwargs):
     """Constructs a ResNet-101 model.
@@ -275,6 +297,6 @@ def resnet200(**kwargs):
 
 
 if __name__ == '__main__':
-    net = resnet18(num_classes=3, sample_size=128, sample_duration=32)
+    net = resnet18(num_classes=3, sample_size=128, sample_duration=16)
     print(net)
     print("net length : ", len(list(net.children())))
