@@ -178,6 +178,16 @@ def get_fine_tuning_parameters(model, ft_begin_index):
     return parameters
 
 
+def get_resnext(depth, **kwargs):
+    assert depth in [50, 101, 152]
+    if depth == 50:
+        return resnext50(**kwargs)
+    elif depth == 101:
+        return resnext101(**kwargs)
+    elif depth == 152:
+        return resnext152(**kwargs)
+
+
 def resnext50(**kwargs):
     """Constructs a ResNet-50 model.
     """
