@@ -18,19 +18,20 @@ def generate_model(opt, model_type):
     if model_type == 'alexnet':
         assert opt.alexnet_type in ['origin', 'dropout']
         model = deepSBD.deepSBD(model_type=opt.alexnet_type)
-    elif model_type == 'resnet':
-        from models.resnet import get_fine_tuning_parameters
-
-        model = resnet.resnet18(num_classes=opt.n_classes,
-                                sample_size=opt.sample_size, sample_duration=opt.sample_duration)
-    elif model_type == 'resnext':
-        model = resnext.resnext101(num_classes=opt.n_classes,
-                                   sample_size=opt.sample_size, sample_duration=opt.sample_duration)
-    elif model_type == 'detector':
-        model = detector.resnext101(num_classes=opt.n_classes,
-                                    sample_size=opt.sample_size, sample_duration=opt.sample_duration, use_depthwise=True)
+    elif not opt.do_detector:
+        if model_type == 'resnet':
+            from models.resnet import get_fine_tuning_parameters
+            assert opt.model_depth in [18, 34, 50, 101, 152]
+            model = resnet.get_resnet(opt.model_depth, num_classes=opt.n_classes,
+                                      sample_size=opt.sample_size, sample_duration=opt.sample_duration)
+        elif model_type == 'resnext':
+            assert opt.model_depth in [101]
+            model = resnext.get_resnext(opt.model_depth, num_classes=opt.n_classes,
+                                       sample_size=opt.sample_size, sample_duration=opt.sample_duration)
     else:
-        raise Exception("Unknown model name")
+        model = detector.get_detector(model_type, opt.model_depth,
+                                      num_classes=opt.n_classes, sample_size=opt.sample_size,
+                                      sample_duration=opt.sample_duration, use_depthwise=True)
 
     # 19.7.31. add deepcopy
     test_model = copy.deepcopy(model)
@@ -57,9 +58,13 @@ def build_model(opt, model_type, phase, device):
     # model=gradual_cls(opt.sample_duration,opt.sample_size,opt.sample_size,model,num_classes)
     # print(model)
     if opt.pretrained_model:
-        if phase == 'train' and opt.pretrain_path:
+        pretrained_model_name = model_type + '-' + str(opt.model_depth) + '-kinetics.pth'
+        pretrained_path = os.path.join(opt.pretrained_dir, pretrained_model_name)
+        if phase == 'train' and os.path.exists(pretrained_path):
             print("use pretrained model")
-            model.load_weights(opt.pretrain_path)
+            model.load_weights(pretrained_path)
+        else:
+            raise Exception("there is no pretrained model : {}".format(pretrained_path))
     else:
         print("no pretrained model")
 
