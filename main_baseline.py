@@ -333,7 +333,7 @@ def test_misaeng(opt, device, model):
                                  temporal_transform=temporal_transform,
                                  target_transform=target_transform,
                                  sample_duration=opt.sample_duration,
-                                 candidate=opt.candidate)
+                                 input_type=opt.input_type, candidate=opt.candidate)
         test_data_loader = torch.utils.data.DataLoader(test_data, batch_size=opt.batch_size,
                                                        num_workers=opt.n_threads, pin_memory=True)
 
@@ -447,7 +447,7 @@ def test_dataset(opt, device, model):
                                  temporal_transform=temporal_transform,
                                  target_transform=target_transform,
                                  sample_duration=opt.sample_duration,
-                                 candidate=opt.candidate)
+                                 input_type=opt.input_type, candidate=opt.candidate)
         test_data_loader = torch.utils.data.DataLoader(test_data, batch_size=opt.batch_size,
                                                        num_workers=opt.n_threads, pin_memory=True)
         labels_path = os.path.join(pickle_dir, video_name + is_full_data + '.labels')
@@ -719,10 +719,12 @@ def train_misaeng(opt, device, model):
         list_root_path.append(os.path.join(opt.root_dir, opt.only_gradual_subdir))
         print(list_root_path, flush=True)
         print("[INFO] reading : ", opt.video_list_path, flush=True)
-        training_data = train_DataSet(list_root_path, opt.video_list_path, opt,
+        training_data = train_DataSet(list_root_path, opt.video_list_path,
                                       spatial_transform=spatial_transform,
                                       temporal_transform=temporal_transform,
-                                      target_transform=target_transform, sample_duration=opt.sample_duration)
+                                      target_transform=target_transform,
+                                      sample_duration=opt.sample_duration,
+                                      input_type=opt.input_type, is_full_data=opt.is_full_data)
 
         weights = torch.DoubleTensor(training_data.weights)
         sampler = torch.utils.data.sampler.WeightedRandomSampler(weights, len(weights))
@@ -835,6 +837,7 @@ def main():
     opt.iter_per_epoch = int(opt.iter_per_epoch / opt.batch_size)
     print("iter_per_epoch : {}, batch_size : {}".format(opt.iter_per_epoch, opt.batch_size))
 
+    assert opt.input_type in ['RGB', 'HSV']
     if opt.phase == 'train':
         train_misaeng(opt, device, model)
     else:
