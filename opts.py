@@ -21,13 +21,15 @@ def parse_opts():
     parser.add_argument('--start_iter', default=0, type=int, help='when training start with differecnt batch size, adjust this value, else 0')
     parser.add_argument('--iter_per_epoch', default=0, type=int, help='if iter=0, adjust automatic, elif iter>0, set this value')
     parser.add_argument('--epoch', default=5, type=int)
-    parser.add_argument('--model', default='detector', type=str, help='alexnet | resnet | resnext | detector')
+    parser.add_argument('--model', default='resnet', type=str, help='alexnet | resnet | resnext')
+    parser.add_argument('--do_detector', default=True, help='if true, use detector model')
+    parser.add_argument('--model_depth', default=50, type=int, help='only resnet-(18, 34, 50, 101, 152), resnext-101 are supported')
     # parser.add_argument('--model_type', default='old', type=str, help='old | new'
     #                                                                   'old: model>parallel>cuda>train'
     #                                                                   'new: model>train>parallel>cuda')
     parser.add_argument('--alexnet_type', default='origin', type=str, help='origin | dropout')
     parser.add_argument('--pretrained_model', default=True, help='if true, use pretrained model')
-    parser.add_argument('--pretrain_path', default='kinetics_pretrained_model/resnext-101-kinetics.pth', type=str, help='Pretrained model (.pth)')
+    parser.add_argument('--pretrained_dir', default='kinetics_pretrained_model/', type=str, help='Pretrained model dir')
     parser.add_argument('--multiloss', default=False, help='using teacher student loss')
     parser.add_argument('--multiloss_type', default='new', help='origin | new | dual')
     parser.add_argument('--teacher_model', default='alexnet', help='only use alexnet')
