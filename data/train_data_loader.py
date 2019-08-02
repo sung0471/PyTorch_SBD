@@ -18,7 +18,7 @@ def pil_loader(path):
             return img.convert('RGB')
 
 
-def video_loader(video_path, video_dir_path, frame_indices, sample_duration, img=False):
+def video_loader(video_path, video_dir_path, frame_indices, sample_duration, input_type='RGB', img=False):
     video = list()
     try:
         if not img:
@@ -33,8 +33,13 @@ def video_loader(video_path, video_dir_path, frame_indices, sample_duration, img
                 status, frame = video_cap.read()
                 if status:
                     # 19.7.31. add HSV version
-                    # frame = Image.fromarray(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)).convert('RGB')
-                    frame = Image.fromarray(cv2.cvtColor(frame, cv2.COLOR_BGR2HSV), 'HSV')
+                    # 19.8.2. add 'if'
+                    if input_type == 'RGB':
+                        frame = Image.fromarray(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)).convert('RGB')
+                    elif input_type == 'HSV':
+                        frame = Image.fromarray(cv2.cvtColor(frame, cv2.COLOR_BGR2HSV), 'HSV')
+                    else:
+                        assert "input_type must be 'RGB' or 'HSV'"
                     video.append(frame)
                 else:
                     break
@@ -47,7 +52,7 @@ def get_default_video_loader():
     return video_loader
 
 
-def make_dataset(root_path, video_list_path, sample_duration, opt):
+def make_dataset(root_path, video_list_path, sample_duration, is_full_data):
     video_list = list()
     info = dict()
     with open(video_list_path, 'r') as f:
@@ -57,7 +62,7 @@ def make_dataset(root_path, video_list_path, sample_duration, opt):
 
             # 19.3.21. add
             # using small dataset
-            if not opt.is_full_data:
+            if not is_full_data:
                 case = ['2']
                 if not(words[0][0] in case):
                     continue
@@ -87,12 +92,14 @@ def make_dataset(root_path, video_list_path, sample_duration, opt):
 
 
 class DataSet(data.Dataset):
-    def __init__(self, root_path, video_list_path, opt,
+    def __init__(self, root_path, video_list_path,
                  spatial_transform=None, temporal_transform=None, target_transform=None,
-                 sample_duration=16, get_loader=get_default_video_loader):
-        self.video_list = make_dataset(root_path, video_list_path, sample_duration, opt)
-        print("[INFO] training policy : ", 'full' if opt.is_full_data else 'no_full')
+                 sample_duration=16, input_type='RGB', is_full_data=True,
+                 get_loader=get_default_video_loader):
+        self.video_list = make_dataset(root_path, video_list_path, sample_duration, is_full_data)
+        print("[INFO] training policy : ", 'full' if is_full_data else 'no_full')
         print("[INFO] training dataset length : ", len(self.video_list))
+        self.input_type = input_type
         self.spatial_transform = spatial_transform
         self.temporal_transform = temporal_transform
         self.target_transform = target_transform
@@ -126,7 +133,7 @@ class DataSet(data.Dataset):
         begin_indices = self.video_list[index]['begin']
         sample_duration = self.video_list[index]['sample_duration']
 
-        clip = self.loader(video_path, None, begin_indices, sample_duration)
+        clip = self.loader(video_path, None, begin_indices, sample_duration, self.input_type)
         # raw_clip=clip
 
         if self.spatial_transform is not None:

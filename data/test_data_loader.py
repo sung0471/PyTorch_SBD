@@ -36,7 +36,7 @@ def pil_loader(path):
             return img.convert('RGB')
 
 
-def video_loader(video_path, frame_pos, sample_duration, img=False):
+def video_loader(video_path, frame_pos, sample_duration, input_type='RGB', img=False):
     video = list()
     try:
         if not img:
@@ -48,8 +48,13 @@ def video_loader(video_path, frame_pos, sample_duration, img=False):
                     break
                 else:
                     # 19.7.31. add HSV version
-                    # frame = Image.fromarray(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)).convert('RGB')
-                    frame = Image.fromarray(cv2.cvtColor(frame, cv2.COLOR_BGR2HSV), 'HSV')
+                    # 19.8.2. add 'if'
+                    if input_type == 'RGB':
+                        frame = Image.fromarray(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)).convert('RGB')
+                    elif input_type == 'HSV':
+                        frame = Image.fromarray(cv2.cvtColor(frame, cv2.COLOR_BGR2HSV), 'HSV')
+                    else:
+                        assert "input_type must be 'RGB' or 'HSV'"
                     video.append(frame)
             video += [video[-1] for _ in range(sample_duration - len(video))]
 
@@ -104,11 +109,12 @@ def make_dataset(video_root, video_name_list, sample_duration, candidate):
 class DataSet(data.Dataset):
     def __init__(self, video_root, video_name,
                  spatial_transform=None, temporal_transform=None, target_transform=None,
-                 sample_duration=16, candidate=False,
+                 sample_duration=16, input_type = 'RGB', candidate=False,
                  get_loader=get_default_video_loader):
         # torch.set_default_tensor_type('torch.cuda.FloatTensor')
         self.video_list, self.total_frame, self.fps = make_dataset(
             video_root, video_name, sample_duration, candidate)
+        self.input_type = input_type
         self.spatial_transform = spatial_transform
         self.temporal_transform = temporal_transform
         self.target_transform = target_transform
@@ -133,7 +139,7 @@ class DataSet(data.Dataset):
         else:
             start_frame = frame_pos
 
-        clip = self.loader(video_path, start_frame, sample_duration)
+        clip = self.loader(video_path, start_frame, sample_duration, self.input_type)
         # raw_clip=clip
 
         if self.spatial_transform is not None:
