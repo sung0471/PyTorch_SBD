@@ -57,10 +57,10 @@ def build_model(opt, model_type, phase, device):
 
     # model=gradual_cls(opt.sample_duration,opt.sample_size,opt.sample_size,model,num_classes)
     # print(model)
-    if opt.pretrained_model:
+    if phase == 'train' and opt.pretrained_model:
         pretrained_model_name = model_type + '-' + str(opt.model_depth) + '-kinetics.pth'
         pretrained_path = os.path.join(opt.pretrained_dir, pretrained_model_name)
-        if phase == 'train' and os.path.exists(pretrained_path):
+        if os.path.exists(pretrained_path):
             print("use pretrained model")
             model.load_weights(pretrained_path)
         else:
