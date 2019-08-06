@@ -27,11 +27,12 @@ def parse_opts():
     # parser.add_argument('--model_type', default='old', type=str, help='old | new'
     #                                                                   'old: model>parallel>cuda>train'
     #                                                                   'new: model>train>parallel>cuda')
-    parser.add_argument('--alexnet_type', default='origin', type=str, help='origin | dropout')
+    parser.add_argument('--alexnet_type', default='dropout', type=str, help='origin | dropout')
     parser.add_argument('--pretrained_model', default=True, help='if true, use pretrained model')
     parser.add_argument('--pretrained_dir', default='kinetics_pretrained_model/', type=str, help='Pretrained model dir')
-    parser.add_argument('--multiloss', default=False, help='using teacher student loss')
-    parser.add_argument('--multiloss_type', default='new', help='origin | new | dual')
+    parser.add_argument('--use_multiloss', default=True, help='using classification + regression loss')
+    parser.add_argument('--KDloss', default=False, help='using teacher student loss')
+    parser.add_argument('--KDloss_type', default='new', help='origin | new | dual')
     parser.add_argument('--teacher_model', default='alexnet', help='only use alexnet')
     parser.add_argument('--teacher_model_path', default='models/Alexnet-final.pth', type=str, help='Pretrained model (.pth)')
     parser.add_argument('--candidate', default=False, help='if true, use candidate extraction')
