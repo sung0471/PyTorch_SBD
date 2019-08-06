@@ -4,10 +4,10 @@ import torch.nn.functional as F
 from torch.autograd import Variable
 
 
-class multiloss(nn.Module):
+class KDloss(nn.Module):
     def __init__(self, loss_type='new'):
         assert loss_type in ['origin', 'new', 'dual']
-        super(multiloss, self).__init__()
+        super(KDloss, self).__init__()
 
         self.loss_type = loss_type
         if self.loss_type in ['origin', 'dual']:
