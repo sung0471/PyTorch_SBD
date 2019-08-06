@@ -31,7 +31,8 @@ def generate_model(opt, model_type):
     else:
         model = detector.get_detector(model_type, opt.model_depth,
                                       num_classes=opt.n_classes, sample_size=opt.sample_size,
-                                      sample_duration=opt.sample_duration, use_depthwise=True)
+                                      sample_duration=opt.sample_duration, use_depthwise=False,
+                                      use_multiloss=opt.use_multiloss)
 
     # 19.7.31. add deepcopy
     test_model = copy.deepcopy(model)
