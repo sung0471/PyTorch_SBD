@@ -1,9 +1,9 @@
 import torch.nn as nn
 
 
-class MultiClassifier(nn.Module):
+class MultiDetector(nn.Module):
     def __init__(self, in_planes, kernel_size=3, num_classes=3):
-        super(MultiClassifier, self).__init__()
+        super(MultiDetector, self).__init__()
 
         self.loc_layer = nn.Conv3d(in_planes, 2,
                                    kernel_size=kernel_size, padding=0)

@@ -1,1 +1,1 @@
-__all__ = ['DepthwiseSeparableConv', 'multi_layer']
+__all__ = ['DepthwiseSeparableConv', 'multi_detector']
