@@ -1,1 +1,3 @@
-__all__ = ['multiloss', 'teacher_student_module']
+__all__ = ['knowledge_distillation_loss', 'teacher_student_module']
+
+from .layers import *
