@@ -130,9 +130,10 @@ class Bottleneck(nn.Module):
 
 class ResNet(nn.Module):
     def __init__(self, block, layers, sample_size, sample_duration,
-                 shortcut_type='B', num_classes=400, use_depthwise=False, use_multiloss=False):
+                 shortcut_type='B', num_classes=400, use_depthwise=False, loss_type=None):
         self.inplanes = 64
-        if use_multiloss:
+        self.Detector_layer = None
+        if loss_type == 'multiloss':
             self.Detector_layer = MultiDetector
 
         super(ResNet, self).__init__()
@@ -149,8 +150,9 @@ class ResNet(nn.Module):
         last_duration = sample_duration
         last_size = math.ceil(sample_size / 32)
         kernel_size = (last_duration, last_size, last_size)
-        if self.use_multiloss:
-            self.Detector_layer(512 * block.expansion, kernel_size=kernel_size, num_classes=num_classes)
+        if self.Detector_layer is not None:
+            self.Detector_layer = self.Detector_layer(512 * block.expansion,
+                                                      kernel_size=kernel_size, num_classes=num_classes)
         else:
             self.avgpool = nn.AvgPool3d(kernel_size, stride=1)
             self.fn = nn.Linear(512 * block.expansion, num_classes)
@@ -202,7 +204,7 @@ class ResNet(nn.Module):
         x = self.layer3(x)
         x = self.layer4(x)
 
-        if self.use_multiloss:
+        if self.Detector_layer is not None:
             out = self.Detector_layer(x)
         else:
             x = self.avgpool(x)
@@ -281,7 +283,7 @@ class ResNeXtBottleneck(nn.Module):
 
 class ResNeXt(nn.Module):
     def __init__(self, block, layers, sample_size, sample_duration, shortcut_type='B',
-                 cardinality=32, num_classes=400, use_depthwise=False, use_multiloss=False):
+                 cardinality=32, num_classes=400, use_depthwise=False, loss_type=None):
         self.inplanes = 64
         self.DS_Conv3d = None
         if use_depthwise:
@@ -491,6 +493,6 @@ def resnext152(**kwargs):
 
 
 if __name__ == '__main__':
-    net = resnet50(num_classes=3, sample_size=128, sample_duration=16, use_depthwise=False, use_multiloss=True)
+    net = resnet50(num_classes=3, sample_size=128, sample_duration=16, use_depthwise=False, loss_type='multiloss')
     print(net)
     print("net length : ", len(list(net.children())))
