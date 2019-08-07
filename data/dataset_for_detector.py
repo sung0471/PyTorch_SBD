@@ -1,8 +1,8 @@
 import os
 import json
 
-make_dataset_from_groundTruth = False
-merge_dataset_with_deepSBD = False
+make_dataset_from_groundTruth = True
+merge_dataset_with_deepSBD = True
 check_data_list = True
 
 data_list_root = 'data_list'
@@ -56,9 +56,10 @@ if make_dataset_from_groundTruth:
                                 f.write('{} {} {} {} {}\n'.format(video_name, start_2, class_type, start, end))
                         else:
                             start_2 = start_1 + 8
-                            if start_2 <= end:
+                            while (end - start_2) > 2:
                                 count[dir_name][transition_type] += 1
                                 f.write('{} {} {} {} {}\n'.format(video_name, start_2, class_type, start, end))
+                                start_2 += 8
 
     print(count)
 
