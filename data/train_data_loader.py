@@ -58,7 +58,9 @@ def make_dataset(root_path, video_list_path, sample_duration, is_full_data):
     with open(video_list_path, 'r') as f:
         for line in f.readlines():
             words = line.split(' ')
-            begin = int(words[-2])
+            video_name = words[0]
+            begin = int(words[1])
+            label = int(words[2])
 
             # 19.3.21. add
             # using small dataset
@@ -68,9 +70,9 @@ def make_dataset(root_path, video_list_path, sample_duration, is_full_data):
                     continue
 
             for i in range(2):
-                info = {"video_path": os.path.join(root_path[i], words[0]),
+                info = {"video_path": os.path.join(root_path[i], video_name),
                         "begin": begin,
-                        "label": int(words[-1])}
+                        "label": label}
                 # print(info['video_path'])                 # for debug
                 if os.path.exists(info['video_path']):
                     break
@@ -79,10 +81,17 @@ def make_dataset(root_path, video_list_path, sample_duration, is_full_data):
                 else:
                     continue
 
-            gts=[]
-            for i in range(4, len(words), 2):
+            gts = list()
+            if label != 0:
+                gt_start = float(words[3])-begin if float(words[3])-begin >= 0 else 0.0
+                gt_end = float(words[4])-begin if float(words[4])-begin < sample_duration else float(sample_duration - 1)
+                for i in range(3, len(words), 2):
+                    gts.append((
+                        gt_start/sample_duration, gt_end/sample_duration
+                    ))
+            else:
                 gts.append((
-                    (float(words[i])-begin)/sample_duration, (float(words[i+1])-begin)/sample_duration
+                    0.0, 15.0/sample_duration
                 ))
             info["gt_intervals"] = gts
             info["sample_duration"] = sample_duration
@@ -92,14 +101,13 @@ def make_dataset(root_path, video_list_path, sample_duration, is_full_data):
 
 
 class DataSet(data.Dataset):
-    def __init__(self, root_path, video_list_path,
+    def __init__(self, root_path, video_list_path, opt,
                  spatial_transform=None, temporal_transform=None, target_transform=None,
-                 sample_duration=16, input_type='RGB', is_full_data=True,
-                 get_loader=get_default_video_loader):
-        self.video_list = make_dataset(root_path, video_list_path, sample_duration, is_full_data)
-        print("[INFO] training policy : ", 'full' if is_full_data else 'no_full')
+                 sample_duration=16, get_loader=get_default_video_loader):
+        self.video_list = make_dataset(root_path, video_list_path, sample_duration, opt.is_full_data)
+        print("[INFO] training policy : ", 'full' if opt.is_full_data else 'no_full')
         print("[INFO] training dataset length : ", len(self.video_list))
-        self.input_type = input_type
+        self.input_type = opt.input_type
         self.spatial_transform = spatial_transform
         self.temporal_transform = temporal_transform
         self.target_transform = target_transform
@@ -153,6 +161,14 @@ class DataSet(data.Dataset):
         target = label
         if self.target_transform is not None:
             target = self.target_transform(target)
+
+        if len(gts) == 1 and len(gts[0]) == 2:
+            target = (
+                         (gts[0][1] + gts[0][0])/2,
+                         gts[0][1] - gts[0][0],
+                         label
+            )
+            target = torch.Tensor(target)
 
         return clip, target
 
