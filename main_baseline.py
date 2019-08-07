@@ -17,7 +17,7 @@ import datetime
 
 from lib.utils import AverageMeter, calculate_accuracy
 from modules.teacher_student_module import TeacherStudentModule
-from modules.multiloss import multiloss
+from modules.knowledge_distillation_loss import KDloss
 from model_cls import build_model
 
 import cv2
@@ -199,7 +199,7 @@ def test(video_path, test_data_loader, model, device, opt):
                 clip = clip.cuda(device, non_blocking=True)
             results = model(clip)
             # # if use teacher student network, only get result of student network output
-            # if opt.multiloss:
+            # if opt.KDloss:
             #     results = results[1]
 
             labels += get_label(results)
@@ -261,7 +261,7 @@ def load_checkpoint(model, opt_model):
 
 
 def get_pickle_dir(root_dir, opt):
-    model = 'KD' if opt.multiloss else opt.model
+    model = 'KD' if opt.KDloss else opt.model
     is_pretrained = 'pretrained' if opt.pretrained_model else 'no_pretrained'
     epoch = 'epoch_' + str(opt.epoch)
 
@@ -298,7 +298,7 @@ def load_pickle(labels_path, frame_pos_path):
 def test_misaeng(opt, device, model):
     # opt = parse_opts()
 
-    # if opt.multiloss:
+    # if opt.KDloss:
     #     teacher_model_path = 'models/Alexnet-final.pth'
     #     model = teacher_student_net(opt, teacher_model_path, 'test', device)
     # else:
@@ -413,7 +413,7 @@ def test_misaeng(opt, device, model):
 def test_dataset(opt, device, model):
     # opt = parse_opts()
 
-    # if opt.multiloss:
+    # if opt.KDloss:
     #     teacher_model_path = 'models/Alexnet-final.pth'
     #     model = teacher_student_net(opt, teacher_model_path, 'test', device)
     # else:
@@ -555,7 +555,7 @@ def train(cur_iter, iter_per_epoch, epoch, data_loader, model, criterion, optimi
 
             loss = criterion(outputs, targets)
 
-            if opt.multiloss:
+            if opt.KDloss:
                 outputs = outputs[1]
 
             acc = calculate_accuracy(outputs, targets)
@@ -652,7 +652,7 @@ def train_misaeng(opt, device, model):
 
     # # 19.5.7. add
     # # teacher student option add
-    # if opt.multiloss:
+    # if opt.KDloss:
     #     teacher_model_path = 'models/Alexnet-final.pth'
     #     model = teacher_student_net(opt, teacher_model_path, 'train', device)
     # else:
@@ -696,8 +696,8 @@ def train_misaeng(opt, device, model):
 
     # 19.5.7. add
     # teacher student option add
-    if opt.multiloss:
-        criterion = multiloss(loss_type=opt.multiloss_type)
+    if opt.KDloss:
+        criterion = KDloss(loss_type=opt.KD_type)
     else:
         criterion = nn.CrossEntropyLoss()
 
@@ -749,7 +749,7 @@ def build_final_model(opt, device):
 
     # 19.5.7. add
     # teacher student option add
-    if opt.multiloss:
+    if opt.KDloss:
         # 19.6.26.
         # remove teacher_model_path
         # because use opt.teacher_model_path
@@ -810,7 +810,7 @@ def main():
     # assert opt.phase in ['train', 'test']
     # # 19.5.7. add
     # # teacher student option add
-    # if opt.multiloss:
+    # if opt.KDloss:
     #     teacher_model_path = 'models/Alexnet-final.pth'
     #     model = teacher_student_net(opt, teacher_model_path, device)
     # else:
