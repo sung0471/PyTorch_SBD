@@ -18,6 +18,7 @@ import datetime
 from lib.utils import AverageMeter, calculate_accuracy
 from modules.teacher_student_module import TeacherStudentModule
 from modules.knowledge_distillation_loss import KDloss
+from modules.multiloss import MultiLoss
 from model_cls import build_model
 
 import cv2
@@ -199,7 +200,7 @@ def test(video_path, test_data_loader, model, device, opt):
                 clip = clip.cuda(device, non_blocking=True)
             results = model(clip)
             # # if use teacher student network, only get result of student network output
-            # if opt.KDloss:
+            # if opt.loss_type == 'KDloss':
             #     results = results[1]
 
             labels += get_label(results)
@@ -261,7 +262,7 @@ def load_checkpoint(model, opt_model):
 
 
 def get_pickle_dir(root_dir, opt):
-    model = 'KD' if opt.KDloss else opt.model
+    model = 'KD' if opt.loss_type == 'KDloss' else opt.model
     is_pretrained = 'pretrained' if opt.pretrained_model else 'no_pretrained'
     epoch = 'epoch_' + str(opt.epoch)
 
@@ -298,7 +299,7 @@ def load_pickle(labels_path, frame_pos_path):
 def test_misaeng(opt, device, model):
     # opt = parse_opts()
 
-    # if opt.KDloss:
+    # if opt.loss_type == 'KDloss':
     #     teacher_model_path = 'models/Alexnet-final.pth'
     #     model = teacher_student_net(opt, teacher_model_path, 'test', device)
     # else:
@@ -413,7 +414,7 @@ def test_misaeng(opt, device, model):
 def test_dataset(opt, device, model):
     # opt = parse_opts()
 
-    # if opt.KDloss:
+    # if opt.loss_type == 'KDloss':
     #     teacher_model_path = 'models/Alexnet-final.pth'
     #     model = teacher_student_net(opt, teacher_model_path, 'test', device)
     # else:
@@ -486,9 +487,12 @@ def test_dataset(opt, device, model):
 def calculate_accuracy(outputs, targets):
     batch_size = targets.size(0)
 
+    if len(outputs) == 2:
+        outputs = outputs[1]
+        target = targets.clone().detach()[:, -1].to(torch.long)
     _, pred = outputs.topk(1, 1, True)
     pred = pred.t()
-    correct = pred.eq(targets.view(1, -1))
+    correct = pred.eq(target.view(1, -1))
     n_correct_elems = correct.float().sum().clone().detach()
 
     return n_correct_elems / batch_size
@@ -555,7 +559,7 @@ def train(cur_iter, iter_per_epoch, epoch, data_loader, model, criterion, optimi
 
             loss = criterion(outputs, targets)
 
-            if opt.KDloss:
+            if opt.loss_type == 'KDloss':
                 outputs = outputs[1]
 
             acc = calculate_accuracy(outputs, targets)
@@ -571,7 +575,7 @@ def train(cur_iter, iter_per_epoch, epoch, data_loader, model, criterion, optimi
 
             if i % 10 == 0:
                 batch_time = time.time() - start_time
-                print('Iter:{} Loss_conf:{} avg_acc:{:.5f} epoch_acc:{:.9f} lr:{} batch_time:{:.3f}s'.format(
+                print('Iter:{} Loss per 10 batch:{} avg_acc:{:.5f} epoch_acc:{:.9f} lr:{} batch_time:{:.3f}s'.format(
                     i, loss.item(), avg_acc, epoch_acc, optimizer.param_groups[0]['lr'], batch_time), flush=True)
                 avg_acc = 0.0
                 start_time = time.time()
@@ -652,7 +656,7 @@ def train_misaeng(opt, device, model):
 
     # # 19.5.7. add
     # # teacher student option add
-    # if opt.KDloss:
+    # if opt.loss_type == 'KDloss':
     #     teacher_model_path = 'models/Alexnet-final.pth'
     #     model = teacher_student_net(opt, teacher_model_path, 'train', device)
     # else:
@@ -696,8 +700,13 @@ def train_misaeng(opt, device, model):
 
     # 19.5.7. add
     # teacher student option add
-    if opt.KDloss:
+    # 19.8.7. add
+    # Multiloss add
+    assert opt.loss_type in ['KDloss', 'multiloss', 'normal']
+    if opt.loss_type == 'KDloss':
         criterion = KDloss(loss_type=opt.KD_type)
+    elif opt.loss_type == 'multiloss':
+        criterion = MultiLoss()
     else:
         criterion = nn.CrossEntropyLoss()
 
@@ -719,12 +728,11 @@ def train_misaeng(opt, device, model):
         list_root_path.append(os.path.join(opt.root_dir, opt.only_gradual_subdir))
         print(list_root_path, flush=True)
         print("[INFO] reading : ", opt.video_list_path, flush=True)
-        training_data = train_DataSet(list_root_path, opt.video_list_path,
+        training_data = train_DataSet(list_root_path, opt.video_list_path, opt,
                                       spatial_transform=spatial_transform,
                                       temporal_transform=temporal_transform,
                                       target_transform=target_transform,
-                                      sample_duration=opt.sample_duration,
-                                      input_type=opt.input_type, is_full_data=opt.is_full_data)
+                                      sample_duration=opt.sample_duration)
 
         weights = torch.DoubleTensor(training_data.weights)
         sampler = torch.utils.data.sampler.WeightedRandomSampler(weights, len(weights))
@@ -749,7 +757,7 @@ def build_final_model(opt, device):
 
     # 19.5.7. add
     # teacher student option add
-    if opt.KDloss:
+    if opt.loss_type == 'KDloss':
         # 19.6.26.
         # remove teacher_model_path
         # because use opt.teacher_model_path
@@ -810,7 +818,7 @@ def main():
     # assert opt.phase in ['train', 'test']
     # # 19.5.7. add
     # # teacher student option add
-    # if opt.KDloss:
+    # if opt.loss_type == 'KDloss':
     #     teacher_model_path = 'models/Alexnet-final.pth'
     #     model = teacher_student_net(opt, teacher_model_path, device)
     # else:
@@ -830,9 +838,9 @@ def main():
     # iter_per_epoch을 opt.is_full_data와 opt.batch_size에 맞게 자동으로 조정
     if opt.iter_per_epoch == 0:
         if opt.is_full_data:
-            opt.iter_per_epoch = 500000
+            opt.iter_per_epoch = 600000
         else:
-            opt.iter_per_epoch = 70000
+            opt.iter_per_epoch = 85000
 
     opt.iter_per_epoch = int(opt.iter_per_epoch / opt.batch_size)
     print("iter_per_epoch : {}, batch_size : {}".format(opt.iter_per_epoch, opt.batch_size))
