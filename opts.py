@@ -8,7 +8,7 @@ def parse_opts():
     parser.add_argument('--cuda', action='store_true', help='If true, cuda is used.')
     parser.set_defaults(cuda=True)
     parser.add_argument('--root_dir', default='data/ClipShots/videos', required=False, type=str, help='Root directory path of data')
-    parser.add_argument('--video_list_path', default='data/data_list/deepSBD.txt', type=str)
+    parser.add_argument('--video_list_path', default='data/data_list/detector_list.txt', type=str)
     parser.add_argument('--train_subdir',type=str,default='train',help='subdirectory for training set')
     parser.add_argument('--only_gradual_subdir',type=str,default='only_gradual',help='subdirectory for only_gradual set')
     parser.add_argument('--test_list_path', default='data/ClipShots/video_lists/test.txt', type=str, help='test list path')
@@ -30,8 +30,9 @@ def parse_opts():
     parser.add_argument('--alexnet_type', default='dropout', type=str, help='origin | dropout')
     parser.add_argument('--pretrained_model', default=True, help='if true, use pretrained model')
     parser.add_argument('--pretrained_dir', default='kinetics_pretrained_model/', type=str, help='Pretrained model dir')
-    parser.add_argument('--use_multiloss', default=True, help='using classification + regression loss')
-    parser.add_argument('--KDloss', default=False, help='using teacher student loss')
+    parser.add_argument('--loss_type', default='multiloss', help='normal(cross entropy)'
+                                                                 'multiloss(cross entropy + regression)'
+                                                                 'KDloss(teacher student loss)')
     parser.add_argument('--KDloss_type', default='new', help='origin | new | dual')
     parser.add_argument('--teacher_model', default='alexnet', help='only use alexnet')
     parser.add_argument('--teacher_model_path', default='models/Alexnet-final.pth', type=str, help='Pretrained model (.pth)')
