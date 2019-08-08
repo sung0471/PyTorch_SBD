@@ -487,9 +487,8 @@ def test_dataset(opt, device, model):
 def calculate_accuracy(outputs, targets):
     batch_size = targets.size(0)
 
-    if len(outputs) == 2:
-        targets = targets[:, -1].to(torch.long)
-        
+    targets = targets[:, -1].to(torch.long)
+
     _, pred = outputs.topk(1, 1, True)
     pred = pred.t()
     correct = pred.eq(targets.view(1, -1))
@@ -557,13 +556,13 @@ def train(cur_iter, iter_per_epoch, epoch, data_loader, model, criterion, optimi
 
             outputs = model(inputs)
             
-            if opt.loss_type == 'normal':
+            if opt.loss_type in ['normal', 'KDloss']:
                 targets = targets[:, -1].to(torch.long)
-                
-            if opt.loss_type != 'normal':
-                outputs = outputs[1]
-                
+
             loss = criterion(outputs, targets)
+
+            if opt.loss_type in ['KDloss', 'multiloss']:
+                outputs = outputs[1]
 
             acc = calculate_accuracy(outputs, targets)
             avg_acc += acc / 10
