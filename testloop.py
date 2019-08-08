@@ -242,3 +242,5 @@ for i in range(8):
         video.append(frame)
 video = torch.stack(video, 0)
 print(torch.Tensor.size(video))
+
+os.makedirs(os.path.join('test', 'test2', 'test3'))
