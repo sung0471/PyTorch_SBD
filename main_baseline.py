@@ -34,9 +34,26 @@ def get_mean(norm_value=255):
     return [114.7748 / norm_value, 107.7354 / norm_value, 99.4750 / norm_value]
 
 
+def detection(results, boundary, sample_duration):
+    loc, conf = results
+    loc_numpy = loc.clone().detach().cpu().numpy()
+    conf_numpy = conf.clone().detach().cpu().numpy()
+    boundary = boundary.clone().detach().cpu().numpy()
+    labels, frame_pos = list(), list()
+
+    for i, (center, length) in enumerate(loc_numpy):
+        end = int((center * 2 + length) / 2 * sample_duration) + boundary[i]
+        start = int((center * 2 - length) / 2 * sample_duration) + boundary[i]
+        frame_pos += [[start, end]]
+    for row in conf_numpy:
+        labels.append(np.argmax(row))
+
+    return labels, frame_pos
+
+
 def get_label(res_tensor):
-    res_numpy=res_tensor.clone().detach().cpu().numpy()
-    labels=[]
+    res_numpy = res_tensor.clone().detach().cpu().numpy()
+    labels = list()
     for row in res_numpy:
         labels.append(np.argmax(row))
     return labels
@@ -118,52 +135,67 @@ def get_result(labels, frame_pos, opt):
         for i, label in enumerate(labels):
             # cut, gradual only
             if label > 0:
-                # transition 데이터가 없을 때
-                if len(final_res) == 0:
-                    final_res.append((frame_pos[i], frame_pos[i] + opt.sample_duration, label))
-                else:
-                    last_boundary = final_res[-1][1]
-                    # 범위가 겹치지 않을때
-                    if last_boundary < frame_pos[i]:
+                if opt.loss_type != 'multiloss':
+                    # transition 데이터가 없을 때
+                    if len(final_res) == 0:
                         final_res.append((frame_pos[i], frame_pos[i] + opt.sample_duration, label))
-                    # 범위가 겹칠 때
                     else:
-                        start_boundary = final_res[-1][0]
-                        last_label = final_res[-1][2]
-                        # cut이 gradual보다 우선하는 정책
-                        if cut_priority:
-                            # 레이블이 같을 때
-                            if last_label == label:
-                                final_res[-1] = (start_boundary, frame_pos[i] + opt.sample_duration, label)
-                            # 나중에 나온 레이블이 cut
-                            elif last_label < label:
-                                final_res[-1] = (start_boundary, frame_pos[i], last_label)
-                                final_res.append((frame_pos[i], frame_pos[i] + opt.sample_duration, label))
-                            # 나중에 나온 레이블이 gradual
-                            else:
-                                final_res.append((last_boundary, frame_pos[i] + opt.sample_duration, label))
-                        # gradual이 cut보다 우선하는 정책
-                        elif gradual_priority:
-                            # 레이블이 같을 때
-                            if last_label == label:
-                                final_res[-1] = (start_boundary, frame_pos[i] + opt.sample_duration, label)
-                            # 나중에 나온 레이블이 gradual
-                            elif last_label > label:
-                                final_res[-1] = (start_boundary, frame_pos[i], last_label)
-                                final_res.append((frame_pos[i], frame_pos[i] + opt.sample_duration, label))
-                            # 나중에 나온 레이블이 cut
-                            else:
-                                final_res.append((last_boundary, frame_pos[i] + opt.sample_duration, label))
-                        # 나중에 오는 transition이 우선하는 정책
+                        last_boundary = final_res[-1][1]
+                        # 범위가 겹치지 않을때
+                        if last_boundary < frame_pos[i]:
+                            final_res.append((frame_pos[i], frame_pos[i] + opt.sample_duration, label))
+                        # 범위가 겹칠 때
                         else:
-                            if last_label == label:
-                                final_res[-1] = (start_boundary, frame_pos[i] + opt.sample_duration, label)
+                            start_boundary = final_res[-1][0]
+                            last_label = final_res[-1][2]
+                            # cut이 gradual보다 우선하는 정책
+                            if cut_priority:
+                                # 레이블이 같을 때
+                                if last_label == label:
+                                    final_res[-1] = (start_boundary, frame_pos[i] + opt.sample_duration, label)
+                                # 나중에 나온 레이블이 cut
+                                elif last_label < label:
+                                    final_res[-1] = (start_boundary, frame_pos[i], last_label)
+                                    final_res.append((frame_pos[i], frame_pos[i] + opt.sample_duration, label))
+                                # 나중에 나온 레이블이 gradual
+                                else:
+                                    final_res.append((last_boundary, frame_pos[i] + opt.sample_duration, label))
+                            # gradual이 cut보다 우선하는 정책
+                            elif gradual_priority:
+                                # 레이블이 같을 때
+                                if last_label == label:
+                                    final_res[-1] = (start_boundary, frame_pos[i] + opt.sample_duration, label)
+                                # 나중에 나온 레이블이 gradual
+                                elif last_label > label:
+                                    final_res[-1] = (start_boundary, frame_pos[i], last_label)
+                                    final_res.append((frame_pos[i], frame_pos[i] + opt.sample_duration, label))
+                                # 나중에 나온 레이블이 cut
+                                else:
+                                    final_res.append((last_boundary, frame_pos[i] + opt.sample_duration, label))
+                            # 나중에 오는 transition이 우선하는 정책
                             else:
-                                final_res[-1] = (start_boundary, frame_pos[i], last_label)
-                                final_res.append((frame_pos[i], frame_pos[i] + opt.sample_duration, label))
-
-            else:
-                pass
+                                if last_label == label:
+                                    final_res[-1] = (start_boundary, frame_pos[i] + opt.sample_duration, label)
+                                else:
+                                    final_res[-1] = (start_boundary, frame_pos[i], last_label)
+                                    final_res.append((frame_pos[i], frame_pos[i] + opt.sample_duration, label))
+                else:
+                    start, end = frame_pos[i][0], frame_pos[i][1]
+                    if len(final_res) == 0:
+                        final_res.append((start, end, label))
+                    else:
+                        last_start = final_res[-1][0]
+                        last_end = final_res[-1][1]
+                        last_label = final_res[-1][2]
+                        if label == last_label:
+                            if label == 1:
+                                if last_end < start or last_start < end:
+                                    final_res.append((start, end, label))
+                            else:
+                                if last_end + 8 <= start:
+                                    final_res.append((start, end, label))
+                                elif last_end + 8 > start:
+                                    final_res[-1][1] = end
     else:
         i = 0
         while i < len(labels):
@@ -194,19 +226,28 @@ def test(video_path, test_data_loader, model, device, opt):
             # for check size
             # print(sys.getsizeof(inputs))
 
-            clip = Variable(clip)
-            if opt.cuda:
-                # clip = clip.to(device)
-                clip = clip.cuda(device, non_blocking=True)
+            # clip = Variable(clip)
+            # if opt.cuda:
+            #     # clip = clip.to(device)
+            #     clip = clip.cuda(device, non_blocking=True)
+            with torch.no_grad():
+                clip = clip.to(device, non_blocking=True)
             results = model(clip)
             # # if use teacher student network, only get result of student network output
             # if opt.loss_type == 'KDloss':
             #     results = results[1]
 
-            labels += get_label(results)
-            boundary = boundary.clone().detach().numpy()
-            for _ in boundary:
-                frame_pos.append(int(_+1))
+            # 19.8.8. add
+            # multiloss 일 때, 처리하는 부분 추가
+            if opt.loss_type == 'multiloss':
+                label, frame_info = detection(results, boundary, opt.sample_duration)
+                labels += label
+                frame_pos += frame_info
+            else:
+                labels += get_label(results)
+                boundary = boundary.clone().detach().cpu().numpy()
+                for _ in boundary:
+                    frame_pos.append(_+1)
 
             if (i+1) % 10 == 0 or i+1 == total_iter:
                 end_time = time.time() - batch_time
@@ -251,11 +292,8 @@ def test(video_path, test_data_loader, model, device, opt):
 
 
 def load_checkpoint(model, opt_model):
-    if opt_model == 'alexnet' or opt_model == 'resnet' or opt_model == 'resnext':
-        path = 'results/model_final.pth'
-    else:
-        print("[ERR] incorrect opt.model : ", opt_model)
-        assert False
+    path = 'results/model_final.pth'
+
     print("load model... : ", opt_model)
     checkpoint = torch.load(path)
     model.load_state_dict(checkpoint['state_dict'])
@@ -263,20 +301,29 @@ def load_checkpoint(model, opt_model):
 
 def get_pickle_dir(root_dir, opt):
     model = 'KD' if opt.loss_type == 'KDloss' else opt.model
+    KD_type = '{}+{}'.format(opt.model, opt.teacher_model) if opt.loss_type == 'KDloss' else None
     is_pretrained = 'pretrained' if opt.pretrained_model else 'no_pretrained'
     epoch = 'epoch_' + str(opt.epoch)
 
-    if not os.path.exists(root_dir):
-        os.mkdir(root_dir)
     model_dir = os.path.join(root_dir, model)
-    if not os.path.exists(model_dir):
-        os.mkdir(model_dir)
-    pretrained_dir = os.path.join(root_dir, model, is_pretrained)
-    if not os.path.exists(pretrained_dir):
-        os.mkdir(pretrained_dir)
-    pickle_dir = os.path.join(root_dir, model, is_pretrained, epoch)
-    if not os.path.exists(pickle_dir):
-        os.mkdir(pickle_dir)
+    if KD_type is not None:
+        model_dir = os.path.join(model_dir, KD_type)
+    pretrained_dir = os.path.join(model_dir, is_pretrained)
+    pickle_dir = os.path.join(pretrained_dir, epoch)
+
+    os.makedirs(pickle_dir)
+
+    # if not os.path.exists(root_dir):
+    #     os.mkdir(root_dir)
+    # model_dir = os.path.join(root_dir, model)
+    # if not os.path.exists(model_dir):
+    #     os.mkdir(model_dir)
+    # pretrained_dir = os.path.join(root_dir, model, is_pretrained)
+    # if not os.path.exists(pretrained_dir):
+    #     os.mkdir(pretrained_dir)
+    # pickle_dir = os.path.join(root_dir, model, is_pretrained, epoch)
+    # if not os.path.exists(pickle_dir):
+    #     os.mkdir(pickle_dir)
 
     return pickle_dir
 
@@ -630,7 +677,7 @@ def get_lastest_model(opt):
     return iter_num
 
 
-def train_misaeng(opt, device, model):
+def train_dataset(opt, device, model):
     # opt = parse_opts()
 
     opt.scales = [opt.initial_scale]
@@ -849,7 +896,7 @@ def main():
 
     assert opt.input_type in ['RGB', 'HSV']
     if opt.phase == 'train':
-        train_misaeng(opt, device, model)
+        train_dataset(opt, device, model)
     else:
         if opt.misaeng:
             test_misaeng(opt, device, model)
@@ -866,6 +913,6 @@ if __name__ == '__main__':
     # device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
     main()
-    # train_misaeng(device)
+    # train_dataset(device)
     # test_dataset(device)
     # test_misaeng(device)
