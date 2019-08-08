@@ -488,11 +488,11 @@ def calculate_accuracy(outputs, targets):
     batch_size = targets.size(0)
 
     if len(outputs) == 2:
-        outputs = outputs[1]
-        target = targets.clone().detach()[:, -1].to(torch.long)
+        targets = targets[:, -1].to(torch.long)
+        
     _, pred = outputs.topk(1, 1, True)
     pred = pred.t()
-    correct = pred.eq(target.view(1, -1))
+    correct = pred.eq(targets.view(1, -1))
     n_correct_elems = correct.float().sum().clone().detach()
 
     return n_correct_elems / batch_size
@@ -556,11 +556,14 @@ def train(cur_iter, iter_per_epoch, epoch, data_loader, model, criterion, optimi
             # inputs = Variable(inputs)
 
             outputs = model(inputs)
-
-            loss = criterion(outputs, targets)
-
-            if opt.loss_type == 'KDloss':
+            
+            if opt.loss_type == 'normal':
+                targets = targets[:, -1].to(torch.long)
+                
+            if opt.loss_type != 'normal':
                 outputs = outputs[1]
+                
+            loss = criterion(outputs, targets)
 
             acc = calculate_accuracy(outputs, targets)
             avg_acc += acc / 10
