@@ -1,5 +1,6 @@
 import torch
 import torch.nn as nn
+import numpy as np
 
 
 class MultiDetector(nn.Module):
@@ -36,7 +37,29 @@ if __name__ == '__main__':
     kernel_size = (16, 4, 4)
     layer = MultiDetector(512 * 4, kernel_size=kernel_size)
     print(layer)
-    input_t = torch.ones([1, 512*4, 16, 4, 4], dtype=torch.float32)
-    loc, conf = layer(input_t)
+    input_t = torch.ones([8, 512*4, 16, 4, 4], dtype=torch.float32)
+    data = layer(input_t)
+    loc, conf = data
     print('loc : {}, size : {}'.format(loc, loc.size()))
     print('conf : {}, size : {}'.format(conf, conf.size()))
+
+    loc_numpy = loc.clone().detach().cpu().numpy()
+    conf_numpy = conf.clone().detach().cpu().numpy()
+    labels, frame_pos = list(), list()
+
+    boundary = list()
+    for i in range(len(loc)):
+        boundary += [0 + 8 * i]
+
+    sample_duration = 16
+    for i, (center, length) in enumerate(loc_numpy):
+        end = int((center * 2 + length) / 2 * sample_duration) + boundary[i]
+        start = int((center * 2 - length) / 2 * sample_duration) + boundary[i]
+        frame_pos += [[start, end]]
+
+    for row in conf_numpy:
+        labels.append(np.argmax(row))
+
+    print(loc_numpy)
+    print(frame_pos)
+    print(conf_numpy)
