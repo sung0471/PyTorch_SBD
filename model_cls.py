@@ -18,21 +18,20 @@ def generate_model(opt, model_type):
     if model_type == 'alexnet':
         assert opt.alexnet_type in ['origin', 'dropout']
         model = deepSBD.deepSBD(model_type=opt.alexnet_type)
-    elif not opt.do_detector:
+    else:
+        assert opt.model_depth in [18, 34, 50, 101, 152]
         if model_type == 'resnet':
             from models.resnet import get_fine_tuning_parameters
-            assert opt.model_depth in [18, 34, 50, 101, 152]
             model = resnet.get_resnet(opt.model_depth, num_classes=opt.n_classes,
                                       sample_size=opt.sample_size, sample_duration=opt.sample_duration)
         elif model_type == 'resnext':
-            assert opt.model_depth in [101]
             model = resnext.get_resnext(opt.model_depth, num_classes=opt.n_classes,
                                        sample_size=opt.sample_size, sample_duration=opt.sample_duration)
-    else:
-        model = detector.get_detector(model_type, opt.model_depth,
-                                      num_classes=opt.n_classes, sample_size=opt.sample_size,
-                                      sample_duration=opt.sample_duration, use_depthwise=False,
-                                      loss_type=opt.loss_type)
+        else:
+            model = detector.get_detector(opt.baseline_model, opt.model_depth,
+                                          num_classes=opt.n_classes, sample_size=opt.sample_size,
+                                          sample_duration=opt.sample_duration, use_depthwise=False,
+                                          loss_type=opt.loss_type)
 
     # 19.7.31. add deepcopy
     test_model = copy.deepcopy(model)
