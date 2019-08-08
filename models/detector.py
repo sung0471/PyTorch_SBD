@@ -155,7 +155,7 @@ class ResNet(nn.Module):
                                                       kernel_size=kernel_size, num_classes=num_classes)
         else:
             self.avgpool = nn.AvgPool3d(kernel_size, stride=1)
-            self.fn = nn.Linear(512 * block.expansion, num_classes)
+            self.fc = nn.Linear(512 * block.expansion, num_classes)
 
         for m in self.modules():
             if isinstance(m, nn.Conv3d):
