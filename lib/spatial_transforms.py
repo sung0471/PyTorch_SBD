@@ -335,6 +335,6 @@ def get_train_spatial_transform(opt):
                                      Normalize(get_mean(opt.norm_value), [1, 1, 1])])
 
 def get_test_spatial_transform(opt):
-    return Compose([Scale((opt.spatial_size,opt.spatial_size)),
+    return Compose([Scale((opt.sample_size, opt.sample_size)),
                     ToTensor(opt.norm_value),
                     Normalize(get_mean(opt.norm_value), [1, 1, 1])])
