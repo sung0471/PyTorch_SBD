@@ -130,7 +130,7 @@ def get_result(labels, frame_pos, opt):
 
     cut_priority = False
     gradual_priority = False
-    final_res = []
+    final_res = list()
     if not do_origin:
         for i, label in enumerate(labels):
             # cut, gradual only
@@ -140,62 +140,99 @@ def get_result(labels, frame_pos, opt):
                     if len(final_res) == 0:
                         final_res.append((frame_pos[i], frame_pos[i] + opt.sample_duration, label))
                     else:
-                        last_boundary = final_res[-1][1]
+                        last_start = final_res[-1][0]
+                        last_end = final_res[-1][1]
+                        last_label = final_res[-1][2]
                         # 범위가 겹치지 않을때
-                        if last_boundary < frame_pos[i]:
+                        if last_end < frame_pos[i]:
                             final_res.append((frame_pos[i], frame_pos[i] + opt.sample_duration, label))
                         # 범위가 겹칠 때
                         else:
-                            start_boundary = final_res[-1][0]
-                            last_label = final_res[-1][2]
                             # cut이 gradual보다 우선하는 정책
                             if cut_priority:
                                 # 레이블이 같을 때
                                 if last_label == label:
-                                    final_res[-1] = (start_boundary, frame_pos[i] + opt.sample_duration, label)
+                                    final_res[-1] = (last_start, frame_pos[i] + opt.sample_duration, label)
                                 # 나중에 나온 레이블이 cut
                                 elif last_label < label:
-                                    final_res[-1] = (start_boundary, frame_pos[i], last_label)
+                                    final_res[-1] = (last_start, frame_pos[i], last_label)
                                     final_res.append((frame_pos[i], frame_pos[i] + opt.sample_duration, label))
                                 # 나중에 나온 레이블이 gradual
                                 else:
-                                    final_res.append((last_boundary, frame_pos[i] + opt.sample_duration, label))
+                                    final_res.append((last_end, frame_pos[i] + opt.sample_duration, label))
                             # gradual이 cut보다 우선하는 정책
                             elif gradual_priority:
                                 # 레이블이 같을 때
                                 if last_label == label:
-                                    final_res[-1] = (start_boundary, frame_pos[i] + opt.sample_duration, label)
+                                    final_res[-1] = (last_start, frame_pos[i] + opt.sample_duration, label)
                                 # 나중에 나온 레이블이 gradual
                                 elif last_label > label:
-                                    final_res[-1] = (start_boundary, frame_pos[i], last_label)
+                                    final_res[-1] = (last_start, frame_pos[i], last_label)
                                     final_res.append((frame_pos[i], frame_pos[i] + opt.sample_duration, label))
                                 # 나중에 나온 레이블이 cut
                                 else:
-                                    final_res.append((last_boundary, frame_pos[i] + opt.sample_duration, label))
+                                    final_res.append((last_end, frame_pos[i] + opt.sample_duration, label))
                             # 나중에 오는 transition이 우선하는 정책
                             else:
                                 if last_label == label:
-                                    final_res[-1] = (start_boundary, frame_pos[i] + opt.sample_duration, label)
+                                    final_res[-1] = (last_start, frame_pos[i] + opt.sample_duration, label)
                                 else:
-                                    final_res[-1] = (start_boundary, frame_pos[i], last_label)
+                                    final_res[-1] = (last_start, frame_pos[i], last_label)
                                     final_res.append((frame_pos[i], frame_pos[i] + opt.sample_duration, label))
                 else:
-                    start, end = frame_pos[i][0], frame_pos[i][1]
-                    if len(final_res) == 0:
-                        final_res.append((start, end, label))
-                    else:
-                        last_start = final_res[-1][0]
-                        last_end = final_res[-1][1]
-                        last_label = final_res[-1][2]
-                        if label == last_label:
-                            if label == 1:
-                                if last_end < start or last_start < end:
-                                    final_res.append((start, end, label))
+                    start, end = int(frame_pos[i][0]), int(frame_pos[i][1])
+                    if start < end:
+                        if len(final_res) == 0:
+                            final_res.append((start, end, label))
+                        else:
+                            last_start = final_res[-1][0]
+                            last_end = final_res[-1][1]
+                            last_label = final_res[-1][2]
+                            if label == 2:
+                                # 안 겹칠 때
+                                if last_end < start or end < last_start:
+                                    if last_end < start:
+                                        final_res.append((start, end, label))
+                                    else:
+                                        final_res.insert(-1, (start, end, label))
+                                # 겹칠 때
+                                else:
+                                    # last_label=2, label=2
+                                    if last_label == label:
+                                        if last_start <= start <= last_end < end:
+                                            final_res[-1] = (last_start, end, label)
+                                        elif start <= last_start <= end < last_end:
+                                            final_res[-1] = (start, last_end, label)
+                                        elif start <= last_start < last_end <= end:
+                                            final_res[-1] = (start, end, label)
+                                        else:
+                                            final_res[-1] = (last_start, last_end, label)
                             else:
-                                if last_end + 8 <= start:
-                                    final_res.append((start, end, label))
-                                elif last_end + 8 > start:
-                                    final_res[-1][1] = end
+                                if last_label == label:
+                                    # last_label=1, label=1
+                                    if (start - last_end) <= 8:
+                                        final_res[-1] = (last_start, end, label)
+                                    else:
+                                        final_res.append((start, end, label))
+                                else:
+                                    # 안 겹칠 경우
+                                    if last_end < start or end < last_start:
+                                        if last_end < start:
+                                            final_res.append((start, end, label))
+                                        else:
+                                            final_res.insert(-1, (start, end, label))
+                                    # 겹칠 경우
+                                    else:
+                                        if last_start <= start <= last_end < end:
+                                            final_res[-1] = (last_start, start - 1, last_label)
+                                            final_res.append((start, end, label))
+                                        elif start <= last_start <= end < last_end:
+                                            final_res[-1] = (start, end, label)
+                                            final_res.append((end + 1, last_end, last_label))
+                                        elif start <= last_start < last_end <= end:
+                                            final_res[-1] = (start, end, label)
+                                        else:
+                                            final_res[-1] = (last_start, last_end, last_label)
     else:
         i = 0
         while i < len(labels):
@@ -311,7 +348,8 @@ def get_pickle_dir(root_dir, opt):
     pretrained_dir = os.path.join(model_dir, is_pretrained)
     pickle_dir = os.path.join(pretrained_dir, epoch)
 
-    os.makedirs(pickle_dir)
+    if not os.path.exists(pickle_dir):
+        os.makedirs(pickle_dir)
 
     # if not os.path.exists(root_dir):
     #     os.mkdir(root_dir)
@@ -531,8 +569,35 @@ def test_dataset(opt, device, model):
     return res
 
 
+def cal_iou(set1, set2):
+    start1, end1 = set1
+    start2, end2 = set2
+    if start1 < start2 < end1:
+        return (end1 - start2 + 1) / (end2 - start1 + 1)
+    elif start2 < start1 < end2:
+        return (end2 - start1 + 1) / (end1 - start2 + 1)
+    else:
+        return 0.0
+
+
 def calculate_accuracy(outputs, targets):
     batch_size = targets.size(0)
+
+    n_iou_sum = None
+    if targets.size(1) > 1:
+        loc_pred = outputs[0].clone().detach()
+        loc_target = targets[:, :-1]
+        iou = list()
+        for i in range(batch_size):
+            pred_end = (loc_pred[i][0] * 2 + loc_pred[i][1]) / 2
+            pred_start = (loc_pred[i][0] * 2 - loc_pred[i][1]) / 2
+            target_end = (loc_target[i][0] * 2 + loc_target[i][1]) / 2
+            target_start = (loc_target[i][0] * 2 - loc_target[i][1]) / 2
+            iou += [cal_iou((pred_start, pred_end), (target_start, target_end))]
+        iou = torch.Tensor(iou).to(torch.float)
+        n_iou_sum = iou.float().sum().clone().detach()
+
+        outputs = outputs[1]
 
     targets = targets[:, -1].to(torch.long)
 
@@ -541,7 +606,12 @@ def calculate_accuracy(outputs, targets):
     correct = pred.eq(targets.view(1, -1))
     n_correct_elems = correct.float().sum().clone().detach()
 
-    return n_correct_elems / batch_size
+    out = dict()
+    if n_iou_sum is not None:
+        out['loc'] = n_iou_sum / batch_size
+    out['conf'] = n_correct_elems / batch_size
+
+    return out
 
 
 # 19.3.8 revision
@@ -560,9 +630,16 @@ def train(cur_iter, iter_per_epoch, epoch, data_loader, model, criterion, optimi
     accuracies = AverageMeter()
 
     i = cur_iter
-    total_acc = [0.0] * epoch
-    epoch_acc = 0.0
-    avg_acc = 0.0
+    total_acc, epoch_acc, avg_acc = dict(), dict(), dict()
+    if opt.loss_type == 'multiloss':
+        keys = ['loc', 'conf']
+    else:
+        keys = ['conf']
+
+    for key in keys:
+        total_acc[key] = [0.0] * epoch
+        epoch_acc[key] = 0.0
+        avg_acc[key] = 0.0
 
     # for debug
     # print(opt.cuda) : True
@@ -608,12 +685,13 @@ def train(cur_iter, iter_per_epoch, epoch, data_loader, model, criterion, optimi
 
             loss = criterion(outputs, targets)
 
-            if opt.loss_type in ['KDloss', 'multiloss']:
+            if opt.loss_type in ['KDloss']:
                 outputs = outputs[1]
 
             acc = calculate_accuracy(outputs, targets)
-            avg_acc += acc / 10
-            epoch_acc += acc / iter_per_epoch
+            for key in keys:
+                avg_acc[key] += acc[key] / 10
+                epoch_acc[key] += acc[key] / iter_per_epoch
 
             optimizer.zero_grad()
             loss.backward()
@@ -624,9 +702,13 @@ def train(cur_iter, iter_per_epoch, epoch, data_loader, model, criterion, optimi
 
             if i % 10 == 0:
                 batch_time = time.time() - start_time
-                print('Iter:{} Loss per 10 batch:{} avg_acc:{:.5f} epoch_acc:{:.9f} lr:{} batch_time:{:.3f}s'.format(
-                    i, loss.item(), avg_acc, epoch_acc, optimizer.param_groups[0]['lr'], batch_time), flush=True)
-                avg_acc = 0.0
+                print('Iter:{} Loss(per 10 batch):{} lr:{} batch_time:{:.3f}s'.format(
+                    i, loss.item(), optimizer.param_groups[0]['lr'], batch_time), flush=True)
+                for key in keys:
+                    print('avg_acc:{:.5f}({}) epoch_acc:{:.9f}({})'.format(
+                        avg_acc[key], key, epoch_acc[key], key), end=' ', flush=True)
+                    avg_acc[key] = 0.0
+                print(flush=True)
                 start_time = time.time()
 
             if i % save_timing == 0:
@@ -638,9 +720,12 @@ def train(cur_iter, iter_per_epoch, epoch, data_loader, model, criterion, optimi
                 }
                 torch.save(states, save_file_path)
             if i % iter_per_epoch == 0 and i != 0:
-                print("epoch {} accuracy : {}".format(i / iter_per_epoch, epoch_acc), flush=True)
-                total_acc[int(i / iter_per_epoch)-1] = float(epoch_acc)
-                epoch_acc = 0.0
+                print("epoch {} accuracy : ".format(i / iter_per_epoch, epoch_acc), end='', flush=True)
+                for key in keys:
+                    print('{}({}) '.format(epoch_acc[key], key), end='', flush=True)
+                    total_acc[key][int(i / iter_per_epoch)-1] = float(epoch_acc[key])
+                    epoch_acc[key] = 0.0
+                print(flush=True)
             if i >= total_iter:
                 break
 
