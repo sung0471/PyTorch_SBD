@@ -732,7 +732,7 @@ def train(cur_iter, iter_per_epoch, epoch, data_loader, model, criterion, optimi
     total_time = time.time() - epoch_time
     total_time = datetime.timedelta(seconds=total_time)
     print("Training Time : {}".format(total_time), flush=True)
-    total_acc.append(str(total_time))
+    total_acc['Training_Time'] = str(total_time)
 
     save_file_path = os.path.join(opt.result_dir, 'model_final.pth'.format(opt.checkpoint_path))
     print("save to {}".format(save_file_path), flush=True)
