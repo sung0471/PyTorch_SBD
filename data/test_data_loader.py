@@ -83,8 +83,8 @@ def make_clip_list(video_root, video_name, sample_duration, candidate):
         info = {"video_path": video_path, "frame_pos": frame_pos, "sample_duration": sample_duration}
         video_list.append(info)
 
-    json_path = os.path.join(video_root, os.path.splitext(video_name)[0] + ".json")
-    json.dump(video_list, open(json_path, 'w'), indent=2)
+    # json_path = os.path.join(video_root, os.path.splitext(video_name)[0] + ".json")
+    # json.dump(video_list, open(json_path, 'w'), indent=2)
 
     return video_list, total_frame, fps
 
