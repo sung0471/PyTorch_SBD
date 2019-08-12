@@ -10,7 +10,7 @@ def parse_opts():
     parser.set_defaults(cuda=True)
     parser.add_argument('--root_dir', default='data/ClipShots/videos', required=False, type=str,
                         help='Root directory path of data')
-    parser.add_argument('--video_list_path', default='data/data_list/detector_list.txt', type=str)
+    parser.add_argument('--video_list_path', default='data/data_list/detector.txt', type=str)
     parser.add_argument('--train_subdir', type=str, default='train', help='subdirectory for training set')
     parser.add_argument('--only_gradual_subdir', type=str, default='only_gradual', help='subdirectory for only_gradual')
     parser.add_argument('--test_list_path', default='data/ClipShots/video_lists/test.txt', type=str,
@@ -23,7 +23,7 @@ def parse_opts():
     parser.add_argument('--input_type', default='RGB', help='RGB | HSV')
     parser.add_argument('--is_full_data', default=True, help='explain whether full data or not')
     parser.add_argument('--start_iter', default=0, type=int,
-                        help='when training start with differecnt batch size, adjust this value, else 0')
+                        help='when training start with different batch size, adjust this value, else 0')
     parser.add_argument('--iter_per_epoch', default=0, type=int,
                         help='if iter=0, adjust automatic, elif iter>0, set this value')
     parser.add_argument('--epoch', default=5, type=int)
@@ -46,7 +46,7 @@ def parse_opts():
     parser.add_argument('--teacher_model_path', default='models/Alexnet-final.pth', type=str,
                         help='Pretrained model (.pth)')
     parser.add_argument('--candidate', default=False, help='if true, use candidate extraction')
-    parser.add_argument('--sample_size', default=128, type=int, help='Height and width of inputs')
+    parser.add_argument('--sample_size', default=64, type=int, help='Height and width of inputs')
     parser.add_argument('--sample_duration', default=16, type=int, help='Temporal duration of inputs')
     parser.add_argument('--n_classes', default=3, type=int, help='Number of classes')
     parser.add_argument('--batch_size', default=8, type=int, help='Batch Size')
