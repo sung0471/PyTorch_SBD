@@ -52,7 +52,7 @@ def get_default_video_loader():
     return video_loader
 
 
-def make_dataset(root_path, video_list_path, sample_duration, is_full_data):
+def make_dataset(root_path, video_list_path, sample_duration, is_full_data, loss_type):
     video_list = list()
     info = dict()
     with open(video_list_path, 'r') as f:
@@ -82,17 +82,18 @@ def make_dataset(root_path, video_list_path, sample_duration, is_full_data):
                     continue
 
             gts = list()
-            if label != 0:
-                gt_start = float(words[3])-begin if float(words[3])-begin >= 0 else 0.0
-                gt_end = float(words[4])-begin if float(words[4])-begin < sample_duration else float(sample_duration - 1)
-                for i in range(3, len(words), 2):
+            if loss_type == 'multiloss':
+                if label != 0:
+                    for i in range(3, len(words), 2):
+                        gt_start = float(words[i])-begin if float(words[i])-begin >= 0 else 0.0
+                        gt_end = float(words[i + 1])-begin if float(words[i + 1])-begin < sample_duration else float(sample_duration - 1)
+                        gts.append((
+                            gt_start/sample_duration, gt_end/sample_duration
+                        ))
+                else:
                     gts.append((
-                        gt_start/sample_duration, gt_end/sample_duration
+                        0.0, 15.0/sample_duration
                     ))
-            else:
-                gts.append((
-                    0.0, 15.0/sample_duration
-                ))
             info["gt_intervals"] = gts
             info["sample_duration"] = sample_duration
             video_list.append(info)
@@ -104,7 +105,7 @@ class DataSet(data.Dataset):
     def __init__(self, root_path, video_list_path, opt,
                  spatial_transform=None, temporal_transform=None, target_transform=None,
                  sample_duration=16, get_loader=get_default_video_loader):
-        self.video_list = make_dataset(root_path, video_list_path, sample_duration, opt.is_full_data)
+        self.video_list = make_dataset(root_path, video_list_path, sample_duration, opt.is_full_data, opt.loss_type)
         print("[INFO] training policy : ", 'full' if opt.is_full_data else 'no_full')
         print("[INFO] training dataset length : ", len(self.video_list))
         self.input_type = opt.input_type
