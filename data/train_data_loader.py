@@ -69,22 +69,31 @@ def make_dataset(root_path, video_list_path, sample_duration, is_full_data, loss
                 if not(words[0][0] in case):
                     continue
 
-            for i in range(2):
-                info = {"video_path": os.path.join(root_path[i], video_name),
+            if root_path is not list:
+                # deepSBD_new.txt / detector.txt일 경우
+                video_dir = words[3].split('\n')[0]
+                info = {"video_path": os.path.join(root_path, video_dir, video_name),
                         "begin": begin,
                         "label": label}
-                # print(info['video_path'])                 # for debug
-                if os.path.exists(info['video_path']):
-                    break
-                elif i == 1:
-                    assert (os.path.exists(info['video_path']))
-                else:
-                    continue
+            else:
+                raise Exception("need opt.root_dir = '~/videos/'")
+                # # deepSBD.txt 일 경우
+                # for i in range(2):
+                #     info = {"video_path": os.path.join(root_path, video_name),
+                #             "begin": begin,
+                #             "label": label}
+                #     # print(info['video_path'])                 # for debug
+                #     if os.path.exists(info['video_path']):
+                #         break
+                #     elif i == 1:
+                #         assert (os.path.exists(info['video_path']))
+                #     else:
+                #         continue
 
             gts = list()
             if loss_type == 'multiloss':
                 if label != 0:
-                    for i in range(3, len(words), 2):
+                    for i in range(4, len(words), 2):
                         gt_start = float(words[i])-begin if float(words[i])-begin >= 0 else 0.0
                         gt_end = float(words[i + 1])-begin if float(words[i + 1])-begin < sample_duration else float(sample_duration - 1)
                         gts.append((
