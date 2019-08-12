@@ -857,12 +857,13 @@ def train_dataset(opt, device, model):
         target_transform = None
         # list_root_path : train path, only_gradual path
         # `19.3.7 : add only_gradual path
-        list_root_path = list()
-        list_root_path.append(os.path.join(opt.root_dir, opt.train_subdir))
-        list_root_path.append(os.path.join(opt.root_dir, opt.only_gradual_subdir))
-        print(list_root_path, flush=True)
+        # `19.8.12 : deepSBD_new.txt / detector.txt를 사용 시 필요없음
+        # list_root_path = list()
+        # list_root_path.append(os.path.join(opt.root_dir, opt.train_subdir))
+        # list_root_path.append(os.path.join(opt.root_dir, opt.only_gradual_subdir))
+        # print(list_root_path, flush=True)
         print("[INFO] reading : ", opt.video_list_path, flush=True)
-        training_data = train_DataSet(list_root_path, opt.video_list_path, opt,
+        training_data = train_DataSet(opt.root_dir, opt.video_list_path, opt,
                                       spatial_transform=spatial_transform,
                                       temporal_transform=temporal_transform,
                                       target_transform=target_transform,
@@ -972,9 +973,9 @@ def main():
     # iter_per_epoch을 opt.is_full_data와 opt.batch_size에 맞게 자동으로 조정
     if opt.iter_per_epoch == 0:
         if opt.is_full_data:
-            opt.iter_per_epoch = 600000
+            opt.iter_per_epoch = 500000
         else:
-            opt.iter_per_epoch = 85000
+            opt.iter_per_epoch = 70000
 
     opt.iter_per_epoch = int(opt.iter_per_epoch / opt.batch_size)
     print("iter_per_epoch : {}, batch_size : {}".format(opt.iter_per_epoch, opt.batch_size))
