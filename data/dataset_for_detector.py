@@ -1,14 +1,16 @@
 import os
 import json
 
-make_dataset_from_groundTruth = False
-merge_dataset_with_deepSBD = False
-make_dataset_using_deepSBD = True
+make_new_deepSBD = False
+make_dataset_from_groundTruth_and_deepSBD_new = False
+make_dataset_using_deepSBD_new = True
 check_count_of_data_list = True
 
 data_list_root = 'data_list'
+new_deepSBD_name = 'deepSBD_new.txt'
 new_file_name = 'detector.txt'
-dataset_path = os.path.join(data_list_root, new_file_name)
+new_deepSBD_path = os.path.join(data_list_root, new_deepSBD_name)
+new_dataset_path = os.path.join(data_list_root, new_file_name)
 
 dataset_root = 'ClipShots'
 video_list_dir = os.path.join(dataset_root, 'video_lists')
@@ -32,59 +34,17 @@ for dir_name in category:
             elif end - start > 1:
                 gt[dir_name][video_name]['gradual'] += [(start, end)]
 
-if make_dataset_from_groundTruth:
-    count = dict()
-    with open(dataset_path, 'wt', encoding='utf-8') as f:
-        for dir_name, data_list in gt.items():
-            data_list_path = os.path.join(data_list_root, dir_name + '.json')
-            json.dump(data_list, open(data_list_path, 'w'))
-
-            count[dir_name] = dict()
-            count[dir_name]['cut'] = 0
-            count[dir_name]['gradual'] = 0
-            for video_name, transitions in data_list.items():
-                for transition_type, transition_list in transitions.items():
-                    for (start, end) in transition_list:
-                        class_type = 2 if transition_type == 'cut' else 1
-
-                        start_1 = start - start % 8
-                        count[dir_name][transition_type] += 1
-                        f.write('{} {} {} {} {}\n'.format(video_name, start_1, class_type, start, end))
-                        if transition_type == 'cut':
-                            start_2 = start_1 - 8
-                            if start_2 >= 0:
-                                count[dir_name][transition_type] += 1
-                                f.write('{} {} {} {} {}\n'.format(video_name, start_2, class_type, start, end))
-                        else:
-                            start_2 = start_1 + 8
-                            while (end - start_2) > 2:
-                                count[dir_name][transition_type] += 1
-                                f.write('{} {} {} {} {}\n'.format(video_name, start_2, class_type, start, end))
-                                start_2 += 8
-
-    print(count)
-
-if merge_dataset_with_deepSBD:
+if make_new_deepSBD:
+    print('Start making deepSBD_new.txt')
     deepSBD_path = os.path.join(data_list_root, 'deepSBD.txt')
-    destination = open(dataset_path, 'at', encoding='utf-8')
+    destination = open(new_deepSBD_path, 'at', encoding='utf-8')
     with open(deepSBD_path, 'rt', encoding='utf-8') as f:
-        for line in f.readlines():
-            video_name, start, class_type = line.split(' ')
-            class_type = int(class_type.split('\n')[0])
-            if class_type == 0:
-                destination.write('{} {} {}\n'.format(video_name, start, class_type))
-
-if make_dataset_using_deepSBD:
-    deepSBD_path = os.path.join(data_list_root, 'deepSBD.txt')
-    destination = open(dataset_path, 'wt', encoding='utf-8')
-    transition_type = ['no', 'gradual', 'cut']
-    sample_duration = 16
-    count = [0, 0]
-    with open(deepSBD_path, 'rt', encoding='utf-8') as f:
-        for line in f.readlines():
-            video_name, start, label = line.split(' ')
-            start = int(start)
-            label = int(label.split('\n')[0])
+        total_length = len(f.readlines())
+        for count, line in enumerate(f.readlines()):
+            words = line.split(' ')
+            video_name = words[0]
+            start = words[1]
+            class_type = int(words[2].split('\n')[0])
             for i in range(2):
                 video_dir = os.path.join(dataset_root, 'videos/', category[i])
                 video_path = os.path.join(video_dir, video_name)
@@ -95,7 +55,68 @@ if make_dataset_using_deepSBD:
                     assert (os.path.exists(video_path))
                 else:
                     continue
+            destination.write('{} {} {} {}\n'.format(video_name, start, class_type, dir_name))
+            if (count + 1) % 50000 == 0:
+                print('processing {}/{} ...'.format(count + 1, total_length))
+    print('Finish making deepSBD_new.txt')
 
+if make_dataset_from_groundTruth_and_deepSBD_new:
+    print('Start making detector dataset from groundTruth and deepSBD new')
+    with open(new_dataset_path, 'wt', encoding='utf-8') as f:
+        for dir_name, data_list in gt.items():
+            # data_list_path = os.path.join(data_list_root, dir_name + '.json')
+            # json.dump(data_list, open(data_list_path, 'wt'))
+
+            for video_name, transitions in data_list.items():
+                for transition_type, transition_list in transitions.items():
+                    for (start, end) in transition_list:
+                        class_type = 2 if transition_type == 'cut' else 1
+
+                        start_1 = start - start % 8
+                        f.write('{} {} {} {} {} {}\n'.format(
+                            video_name, start_1, class_type, dir_name, start, end))
+                        if transition_type == 'cut':
+                            start_2 = start_1 - 8
+                            if start_2 >= 0:
+                                f.write('{} {} {} {} {} {}\n'.format(
+                                    video_name, start_2, class_type, dir_name, start, end))
+                        else:
+                            start_2 = start_1 + 8
+                            while (end - start_2) > 2:
+                                f.write('{} {} {} {} {} {}\n'.format(
+                                    video_name, start_2, class_type, dir_name, start, end))
+                                start_2 += 8
+    print('Finish making detector dataset from groundTruth')
+
+    deepSBD_new = new_deepSBD_path
+    destination = open(new_dataset_path, 'at', encoding='utf-8')
+    with open(deepSBD_new, 'rt', encoding='utf-8') as f:
+        for line in f.readlines():
+            words = line.split(' ')
+            video_name = words[0]
+            start = words[1]
+            class_type = int(words[2])
+            dir_name = words[3]
+            if class_type == 0:
+                destination.write('{} {} {} {}'.format(video_name, start, class_type, dir_name))
+    print('Finish making detector dataset from deepSBD new')
+
+if make_dataset_using_deepSBD_new:
+    print('Start making detector dataset using deepSBD new')
+
+    deepSBD_new = new_deepSBD_path
+    destination = open(new_dataset_path, 'wt', encoding='utf-8')
+    transition_type = ['no', 'gradual', 'cut']
+    sample_duration = 16
+    count = [0, 0]
+    no_gt = dict()
+    with open(deepSBD_new, 'rt', encoding='utf-8') as f:
+        for line in f.readlines():
+            words = line.split(' ')
+            video_name = words[0]
+            start = int(words[1])
+            label = int(words[2])
+            dir_name = words[3].split('\n')[0]
             if label != 0:
                 end = start + sample_duration - 1
                 check = False
@@ -112,23 +133,26 @@ if make_dataset_using_deepSBD:
                         continue
 
                     if check:
-                        destination.write('{} {} {} {} {}\n'.format(video_name, start, label, gt_s, gt_e))
+                        destination.write('{} {} {} {} {} {}\n'.format(video_name, start, label, dir_name, gt_s, gt_e))
                         break
                 count[check] += 1
                 if check:
                     check = not check
-                    print('{} {} {} {} {}'.format(video_name, start, label, gt_s, gt_e))
                 else:
+                    if dir_name not in no_gt.keys():
+                        no_gt[dir_name] = list()
+                    no_gt[dir_name] += [[video_name, start, label, dir_name]]
                     print('{}/{} : no gt'.format(dir_name, video_name))
             else:
-                destination.write('{} {} {}\n'.format(video_name, start, label))
+                destination.write('{} {} {} {}\n'.format(video_name, start, label, dir_name))
                 count[1] += 1
 
     print('gt/no_gt : {}/{}'.format(count[1], count[0]))
+    json.dump(no_gt, open('no_gt.json', 'wt', encoding='utf-8'), indent=2)
 
 if check_count_of_data_list:
     count = dict()
-    with open(dataset_path, 'rt', encoding='utf-8') as f:
+    with open(new_dataset_path, 'rt', encoding='utf-8') as f:
         for line in f.readlines():
             class_type = line.split(' ')[2]
             class_type = class_type.split('\n')[0]
