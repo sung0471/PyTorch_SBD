@@ -13,22 +13,6 @@ from lib.candidate_extracting import candidate_extraction
 from models.squeezenet import SqueezeNetFeature
 
 
-def no_candidate_frame_pos(root_dir, video_name, sample_duration):
-    video_dir = os.path.join(root_dir, video_name)
-
-    frame_index_list = list()
-    # input video (cv2)
-    cap = cv2.VideoCapture(video_dir)
-    total_frame = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-    fps = int(cap.get(cv2.CAP_PROP_FPS))
-    i = 0
-    while i < total_frame:
-        frame_index_list.append(i)
-        i += sample_duration / 2
-
-    return frame_index_list, total_frame, fps
-
-
 def pil_loader(path):
     # open path as file to avoid ResourceWarning (https://github.com/python-pillow/Pillow/issues/835)
     with open(path, 'rb') as f:
@@ -67,8 +51,23 @@ def get_default_video_loader():
     return video_loader
 
 
+def no_candidate_frame_pos(root_dir, video_name, sample_duration):
+    video_dir = os.path.join(root_dir, video_name)
+
+    frame_index_list = list()
+    # input video (cv2)
+    cap = cv2.VideoCapture(video_dir)
+    total_frame = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+    fps = int(cap.get(cv2.CAP_PROP_FPS))
+    i = 0
+    while i < total_frame:
+        frame_index_list.append(i)
+        i += sample_duration / 2
+
+    return frame_index_list, total_frame, fps
+
+
 def make_clip_list(video_root, video_name, sample_duration, candidate):
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     video_list = list()
     if candidate:
         model = SqueezeNetFeature()
@@ -109,7 +108,7 @@ def make_dataset(video_root, video_name_list, sample_duration, candidate):
 class DataSet(data.Dataset):
     def __init__(self, video_root, video_name,
                  spatial_transform=None, temporal_transform=None, target_transform=None,
-                 sample_duration=16, input_type = 'RGB', candidate=False,
+                 sample_duration=16, input_type='RGB', candidate=False,
                  get_loader=get_default_video_loader):
         # torch.set_default_tensor_type('torch.cuda.FloatTensor')
         self.video_list, self.total_frame, self.fps = make_dataset(
