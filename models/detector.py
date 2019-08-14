@@ -288,21 +288,29 @@ class ResNeXt(nn.Module):
         self.DS_Conv3d = None
         if use_depthwise:
             self.DS_Conv3d = DepthwiseSeparableConv(dimension=3)
+        self.Detector_layer = None
+        if loss_type == 'multiloss':
+            self.Detector_layer = MultiDetector
 
         super(ResNeXt, self).__init__()
         self.conv1 = nn.Conv3d(3, 64, kernel_size=7, stride=(1, 2, 2), padding=(3, 3, 3), bias=False)
         self.bn1 = nn.BatchNorm3d(64)
         self.relu = nn.ReLU(inplace=True)
-        self.maxpool = nn.MaxPool3d(kernel_size=(3, 3, 3), stride=(2, 2, 2), padding=1)
+        self.maxpool = nn.MaxPool3d(kernel_size=(3, 3, 3), stride=(1, 2, 2), padding=1)
         self.layer1 = self._make_layer(block, 128, layers[0], shortcut_type, cardinality)
-        self.layer2 = self._make_layer(block, 256, layers[1], shortcut_type, cardinality, stride=(2, 2, 2))
-        self.layer3 = self._make_layer(block, 512, layers[2], shortcut_type, cardinality, stride=(2, 2, 2))
-        self.layer4 = self._make_layer(block, 1024, layers[3], shortcut_type, cardinality, stride=(2, 2, 2))
-        last_duration = int(math.ceil(sample_duration / 16))
-        # last_duration = sample_duration
-        last_size = int(math.ceil(sample_size / 32))
-        self.avgpool = nn.AvgPool3d((last_duration, last_size, last_size), stride=1)  # 1
-        self.fc = nn.Linear(cardinality * 32 * block.expansion, num_classes)
+        self.layer2 = self._make_layer(block, 256, layers[1], shortcut_type, cardinality, stride=(1, 2, 2))
+        self.layer3 = self._make_layer(block, 512, layers[2], shortcut_type, cardinality, stride=(1, 2, 2))
+        self.layer4 = self._make_layer(block, 1024, layers[3], shortcut_type, cardinality, stride=(1, 2, 2))
+        # last_duration = math.ceil(sample_duration / 16)
+        last_duration = sample_duration
+        last_size = math.ceil(sample_size / 32)
+        kernel_size = (last_duration, last_size, last_size)
+        if self.Detector_layer is not None:
+            self.Detector_layer = self.Detector_layer(cardinality * 32 * block.expansion,
+                                                      kernel_size=kernel_size, num_classes=num_classes)
+        else:
+            self.avgpool = nn.AvgPool3d(kernel_size, stride=1)
+            self.fc = nn.Linear(cardinality * 32 * block.expansion, num_classes)
 
         for m in self.modules():
             if isinstance(m, nn.Conv3d):
@@ -349,12 +357,15 @@ class ResNeXt(nn.Module):
         x = self.layer3(x)
         x = self.layer4(x)
 
-        x = self.avgpool(x)
+        if self.Detector_layer is not None:
+            out = self.Detector_layer(x)
+        else:
+            x = self.avgpool(x)
 
-        x = x.view(x.size(0), -1)
-        x = self.fc(x)
+            x = x.view(x.size(0), -1)
+            out = self.fc(x)
 
-        return x
+        return out
 
     def load_weights(self, base_file):
         other, ext = os.path.splitext(base_file)
