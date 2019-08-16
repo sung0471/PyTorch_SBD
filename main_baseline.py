@@ -136,49 +136,50 @@ def get_result(labels, frame_pos, opt):
             # cut, gradual only
             if label > 0:
                 if opt.loss_type != 'multiloss':
+                    start = int(frame_pos[i])
                     # transition 데이터가 없을 때
                     if len(final_res) == 0:
-                        final_res.append((frame_pos[i], frame_pos[i] + opt.sample_duration, label))
+                        final_res.append((start, start + opt.sample_duration, label))
                     else:
                         last_start = final_res[-1][0]
                         last_end = final_res[-1][1]
                         last_label = final_res[-1][2]
                         # 범위가 겹치지 않을때
-                        if last_end < frame_pos[i]:
-                            final_res.append((frame_pos[i], frame_pos[i] + opt.sample_duration, label))
+                        if last_end < start:
+                            final_res.append((start, start + opt.sample_duration, label))
                         # 범위가 겹칠 때
                         else:
                             # cut이 gradual보다 우선하는 정책
                             if cut_priority:
                                 # 레이블이 같을 때
                                 if last_label == label:
-                                    final_res[-1] = (last_start, frame_pos[i] + opt.sample_duration, label)
+                                    final_res[-1] = (last_start, start + opt.sample_duration, label)
                                 # 나중에 나온 레이블이 cut
                                 elif last_label < label:
-                                    final_res[-1] = (last_start, frame_pos[i], last_label)
-                                    final_res.append((frame_pos[i], frame_pos[i] + opt.sample_duration, label))
+                                    final_res[-1] = (last_start, start, last_label)
+                                    final_res.append((start, start + opt.sample_duration, label))
                                 # 나중에 나온 레이블이 gradual
                                 else:
-                                    final_res.append((last_end, frame_pos[i] + opt.sample_duration, label))
+                                    final_res.append((last_end, start + opt.sample_duration, label))
                             # gradual이 cut보다 우선하는 정책
                             elif gradual_priority:
                                 # 레이블이 같을 때
                                 if last_label == label:
-                                    final_res[-1] = (last_start, frame_pos[i] + opt.sample_duration, label)
+                                    final_res[-1] = (last_start, start + opt.sample_duration, label)
                                 # 나중에 나온 레이블이 gradual
                                 elif last_label > label:
-                                    final_res[-1] = (last_start, frame_pos[i], last_label)
-                                    final_res.append((frame_pos[i], frame_pos[i] + opt.sample_duration, label))
+                                    final_res[-1] = (last_start, start, last_label)
+                                    final_res.append((start, start + opt.sample_duration, label))
                                 # 나중에 나온 레이블이 cut
                                 else:
-                                    final_res.append((last_end, frame_pos[i] + opt.sample_duration, label))
+                                    final_res.append((last_end, start + opt.sample_duration, label))
                             # 나중에 오는 transition이 우선하는 정책
                             else:
                                 if last_label == label:
-                                    final_res[-1] = (last_start, frame_pos[i] + opt.sample_duration, label)
+                                    final_res[-1] = (last_start, start + opt.sample_duration, label)
                                 else:
-                                    final_res[-1] = (last_start, frame_pos[i], last_label)
-                                    final_res.append((frame_pos[i], frame_pos[i] + opt.sample_duration, label))
+                                    final_res[-1] = (last_start, start, last_label)
+                                    final_res.append((start, start + opt.sample_duration, label))
                 else:
                     start, end = int(frame_pos[i][0]), int(frame_pos[i][1])
                     if start < end:
@@ -584,7 +585,7 @@ def calculate_accuracy(outputs, targets):
     batch_size = targets.size(0)
 
     n_iou_sum = None
-    if targets.size(1) > 1:
+    if targets.dim() > 1:
         loc_pred = outputs[0].clone().detach()
         loc_target = targets[:, :-1]
         iou = list()
@@ -598,8 +599,7 @@ def calculate_accuracy(outputs, targets):
         n_iou_sum = iou.float().sum().clone().detach()
 
         outputs = outputs[1]
-
-    targets = targets[:, -1].to(torch.long)
+        targets = targets[:, -1].to(torch.long)
 
     _, pred = outputs.topk(1, 1, True)
     pred = pred.t()
@@ -679,9 +679,9 @@ def train(cur_iter, iter_per_epoch, epoch, data_loader, model, criterion, optimi
             # inputs = Variable(inputs)
 
             outputs = model(inputs)
-            
-            if opt.loss_type in ['normal', 'KDloss']:
-                targets = targets[:, -1].to(torch.long)
+
+            # if opt.loss_type in ['normal', 'KDloss']:
+            #     targets = targets[:, -1].to(torch.long)
 
             loss = criterion(outputs, targets)
 
