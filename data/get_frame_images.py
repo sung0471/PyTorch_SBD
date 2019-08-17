@@ -29,16 +29,20 @@ def get_gt_dirs(path_type, check_dataset, dataloader_name=None):
     if dataloader_name is None:
         for i, p_type in enumerate(path_type):
             if check_dataset[i]:
-                if path_type != 'result':
+                if p_type in ['train', 'only_gradual']:
                     file_list_path = os.path.join(list_path_dir, p_type + '.txt')
-                    with open(file_list_path, 'r') as f:
-                        video_name_list[p_type] = [line.strip('\n') for line in f.readlines()]
-
-                    gt_path = os.path.join(gt_base_dir, p_type + '.json')
-                    gts[p_type] = json.load(open(gt_path, 'r'))
                 else:
-                    result_dir = os.path.join('../results/', 'results.json')
-                    gts["result"] = json.load(open(result_dir, 'r'))
+                    file_list_path = os.path.join(list_path_dir, 'test.txt')
+
+                with open(file_list_path, 'r') as f:
+                    video_name_list[p_type] = [line.strip('\n') for line in f.readlines()]
+
+                if p_type != 'result':
+                    gt_path = os.path.join(gt_base_dir, p_type + '.json')
+                else:
+                    gt_path = os.path.join('../results/', 'results_KD_resnext-101.json')
+
+                gts[p_type] = json.load(open(gt_path, 'r'))
         return video_name_list, gts
     else:
         for i, dataloader_file_name in enumerate(dataloader_name):
@@ -107,56 +111,60 @@ def get_images(path_type, video_name_list, gts):
         # file_name = "hUoDOxOxK1I.mp4"
 
         total_start_time = time.time()
-        for i, file_name in enumerate(video_name_list[p_type]):
-            per_video_start_time = time.time()
+        if p_type in video_name_list.keys():
+            for i, file_name in enumerate(video_name_list[p_type]):
+                per_video_start_time = time.time()
 
-            video_base_dir = "ClipShots/videos/"
-            video_path = os.path.join(video_base_dir, p_type, file_name)
+                video_base_dir = "ClipShots/videos/"
+                if p_type != 'result':
+                    video_path = os.path.join(video_base_dir, p_type, file_name)
+                else:
+                    video_path = os.path.join(video_base_dir, 'test', file_name)
 
-            if path_type != 'result':
-                pos_info = gts[p_type][file_name]["transitions"]
-                if file_name == 'hUoDOxOxK1I.mp4':
-                    pos_info += [[3113, 3133]]
-            else:
-                pos_info = gts[p_type][file_name]
+                if p_type != 'result':
+                    pos_info = gts[p_type][file_name]["transitions"]
+                    if file_name == 'hUoDOxOxK1I.mp4':
+                        pos_info += [[3113, 3133]]
+                else:
+                    pos_info = gts[p_type][file_name]
 
-            images_path = os.path.join('images', p_type, file_name)
+                images_path = os.path.join('images', p_type, file_name)
 
-            if not os.path.exists(images_path):
-                os.makedirs(images_path)
-                os.mkdir(os.path.join(images_path, 'cut'))
-                os.mkdir(os.path.join(images_path, 'gradual'))
+                if not os.path.exists(images_path):
+                    os.makedirs(images_path)
+                    os.mkdir(os.path.join(images_path, 'cut'))
+                    os.mkdir(os.path.join(images_path, 'gradual'))
 
-            if path_type != 'result':
-                for frame_pos, frame_end in pos_info:
-                    if frame_end - frame_pos == 1:
-                        transition_type = 'cut'
-                        frame_pos -= 3
-                        frame_end += 3
-                    else:
-                        transition_type = 'gradual'
-                    image_path = os.path.join(images_path, transition_type)
-                    print_frames(video_path, frame_pos, frame_end, image_path)
-
-            else:
-                for type, data in pos_info.items():
-                    for frame_pos, frame_end in data:
-                        transition_type = type
+                if p_type != 'result':
+                    for frame_pos, frame_end in pos_info:
+                        if frame_end - frame_pos == 1:
+                            transition_type = 'cut'
+                            frame_pos -= 3
+                            frame_end += 3
+                        else:
+                            transition_type = 'gradual'
                         image_path = os.path.join(images_path, transition_type)
-                        print_frames(video_cap, frame_pos, frame_end, image_path)
+                        print_frames(video_path, frame_pos, frame_end, image_path)
 
-            per_video_end_time = time.time() - per_video_start_time
+                else:
+                    for type, data in pos_info.items():
+                        for frame_pos, frame_end in data:
+                            transition_type = type
+                            image_path = os.path.join(images_path, transition_type)
+                            print_frames(video_path, frame_pos, frame_end, image_path)
 
-            print('video #{} {} : {}'.format(i, file_name, per_video_end_time), flush=True)
-        total_time = time.time() - total_start_time
-        print('Total video({}) : {}'.format(p_type, datetime.timedelta(seconds=total_time)), flush=True)
+                per_video_end_time = time.time() - per_video_start_time
+
+                print('video #{} {} : {}s'.format(i, file_name, per_video_end_time), flush=True)
+            total_time = time.time() - total_start_time
+            print('Total video({}) : {}'.format(p_type, datetime.timedelta(seconds=total_time)), flush=True)
 
 
 if __name__ == '__main__':
     path_type = ['train', 'only_gradual', 'test', 'result']
-    check_dataset = [False, False, False, False]
+    check_dataset = [False, False, False, True]
     dataloader_name = ['deepSBD', 'detector', 'detector_new']
-    check_dataloader = [False, True, False]
+    check_dataloader = [False, False, False]
 
     if True in check_dataset:
         video_name_list, gts = get_gt_dirs(path_type, check_dataset)
