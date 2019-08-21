@@ -97,11 +97,13 @@ def make_dataset(root_path, video_list_path, sample_duration, is_full_data, loss
                         gt_start = float(words[i])-begin if float(words[i])-begin >= 0 else 0.0
                         gt_end = float(words[i + 1])-begin if float(words[i + 1])-begin < sample_duration else float(sample_duration - 1)
                         gts.append((
-                            gt_start/sample_duration, gt_end/sample_duration
+                            gt_start, gt_end
+                            # gt_start / sample_duration, gt_end / sample_duration
                         ))
                 else:
                     gts.append((
-                        0.0, 15.0/sample_duration
+                        0.0, 15.0
+                        # 0.0, 15.0 / sample_duration
                     ))
             info["gt_intervals"] = gts
             info["sample_duration"] = sample_duration
