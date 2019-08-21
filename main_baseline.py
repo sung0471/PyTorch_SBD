@@ -42,8 +42,10 @@ def detection(results, boundary, sample_duration):
     labels, frame_pos = list(), list()
 
     for i, (center, length) in enumerate(loc_numpy):
-        end = int((center * 2 + length) / 2 * sample_duration) + boundary[i]
-        start = int((center * 2 - length) / 2 * sample_duration) + boundary[i]
+        end = int((center * 2 + length) / 2) + boundary[i]
+        start = int((center * 2 - length) / 2) + boundary[i]
+        # end = int((center * 2 + length) / 2 * sample_duration) + boundary[i]
+        # start = int((center * 2 - length) / 2 * sample_duration) + boundary[i]
         frame_pos += [[start, end]]
     for row in conf_numpy:
         labels.append(np.argmax(row))
