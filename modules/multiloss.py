@@ -8,6 +8,7 @@ class MultiLoss(nn.Module):
         super(MultiLoss, self).__init__()
 
         self.reg_loss = nn.SmoothL1Loss()
+        # self.reg_loss = nn.MSELoss()
         self.conf_loss = nn.CrossEntropyLoss()
 
     def forward(self, predictions, targets):
