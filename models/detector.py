@@ -151,8 +151,8 @@ class ResNet(nn.Module):
         last_size = math.ceil(sample_size / 32)
         kernel_size = (last_duration, last_size, last_size)
         if self.Detector_layer is not None:
-            self.Detector_layer = self.Detector_layer(512 * block.expansion,
-                                                      kernel_size=kernel_size, num_classes=num_classes)
+            self.Detector_layer = self.Detector_layer(block, 512, kernel_size=kernel_size,
+                                                      num_classes=num_classes, extra_layers=True)
         else:
             self.avgpool = nn.AvgPool3d(kernel_size, stride=1)
             self.fc = nn.Linear(512 * block.expansion, num_classes)
@@ -306,8 +306,8 @@ class ResNeXt(nn.Module):
         last_size = math.ceil(sample_size / 32)
         kernel_size = (last_duration, last_size, last_size)
         if self.Detector_layer is not None:
-            self.Detector_layer = self.Detector_layer(cardinality * 32 * block.expansion,
-                                                      kernel_size=kernel_size, num_classes=num_classes)
+            self.Detector_layer = self.Detector_layer(block, cardinality * 32, kernel_size=kernel_size,
+                                                      num_classes=num_classes, extra_layers=True)
         else:
             self.avgpool = nn.AvgPool3d(kernel_size, stride=1)
             self.fc = nn.Linear(cardinality * 32 * block.expansion, num_classes)
