@@ -842,7 +842,7 @@ def train_dataset(opt, device, model):
     if opt.loss_type == 'KDloss':
         criterion = KDloss(loss_type=opt.KD_type)
     elif opt.loss_type == 'multiloss':
-        criterion = MultiLoss()
+        criterion = MultiLoss(extra_layers=True)
     else:
         criterion = nn.CrossEntropyLoss()
 
