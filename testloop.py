@@ -243,4 +243,21 @@ for i in range(8):
 video = torch.stack(video, 0)
 print(torch.Tensor.size(video))
 
-os.makedirs(os.path.join('test', 'test2', 'test3'))
+# os.makedirs(os.path.join('test', 'test2', 'test3'))
+
+default_bar_number_list = dict()
+default_bar_number_list[16] = [15, 7, 3, 1]
+default_bar_number_list[32] = [31, 15, 7, 3, 1]
+default_bar = dict()
+default_bar[16] = torch.zeros(26, 2)
+default_bar[32] = torch.zeros(57, 2)
+for sample_duration in default_bar_number_list.keys():
+    count = 0
+    length = 2
+    for default_bar_number in default_bar_number_list[sample_duration]:
+        for start in range(default_bar_number):
+            default_bar[sample_duration][count][0] = start * (length / 2)
+            default_bar[sample_duration][count][1] = start * (length / 2) + length - 1
+            count += 1
+        length *= 2
+print(default_bar)
