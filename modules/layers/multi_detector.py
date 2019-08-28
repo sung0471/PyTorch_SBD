@@ -47,6 +47,7 @@ class MultiDetector(nn.Module):
             conf_x = self.conf_pool(x)
             conf_x = conf_x.view(batch_size, -1)
             conf_x = self.conf_fc(conf_x)
+            out = (loc_x.view(batch_size, 2), conf_x.view(batch_size, self.num_classes))
         else:
             loc_list = list()
             conf_list = list()
@@ -66,7 +67,7 @@ class MultiDetector(nn.Module):
             for i in range(1, len(loc_list)):
                 loc_x = torch.cat((loc_x, loc_list[i]), 1)
                 conf_x = torch.cat((conf_x, conf_list[i]), 1)
-        out = (loc_x.view(batch_size, -1, 2), conf_x.view(batch_size, -1, self.num_classes))
+            out = (loc_x.view(batch_size, -1, 2), conf_x.view(batch_size, -1, self.num_classes))
 
         return out
 
