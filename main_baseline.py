@@ -15,7 +15,7 @@ from data.test_data_loader import DataSet as test_DataSet
 import time
 import datetime
 
-from lib.utils import AverageMeter, calculate_accuracy
+from lib.utils import AverageMeter, calculate_accuracy, decoding
 from modules.teacher_student_module import TeacherStudentModule
 from modules.knowledge_distillation_loss import KDloss
 from modules.multiloss import MultiLoss
@@ -36,6 +36,7 @@ def get_mean(norm_value=255):
 
 def detection(results, boundary, sample_duration):
     loc, conf = results
+    loc = decoding(loc)
     loc_numpy = loc.clone().detach().cpu().numpy()
     conf_numpy = conf.clone().detach().cpu().numpy()
     boundary = boundary.clone().detach().cpu().numpy()
@@ -572,50 +573,6 @@ def test_dataset(opt, device, model):
     return res
 
 
-def cal_iou(set1, set2):
-    start1, end1 = set1
-    start2, end2 = set2
-    if start1 < start2 < end1:
-        return (end1 - start2 + 1) / (end2 - start1 + 1)
-    elif start2 < start1 < end2:
-        return (end2 - start1 + 1) / (end1 - start2 + 1)
-    else:
-        return 0.0
-
-
-def calculate_accuracy(outputs, targets):
-    batch_size = targets.size(0)
-
-    n_iou_sum = None
-    if targets.dim() > 1:
-        loc_pred = outputs[0].clone().detach()
-        loc_target = targets[:, :-1]
-        iou = list()
-        for i in range(batch_size):
-            pred_end = (loc_pred[i][0] * 2 + loc_pred[i][1]) / 2
-            pred_start = (loc_pred[i][0] * 2 - loc_pred[i][1]) / 2
-            target_end = (loc_target[i][0] * 2 + loc_target[i][1]) / 2
-            target_start = (loc_target[i][0] * 2 - loc_target[i][1]) / 2
-            iou += [cal_iou((pred_start, pred_end), (target_start, target_end))]
-        iou = torch.Tensor(iou).to(torch.float)
-        n_iou_sum = iou.float().sum().clone().detach()
-
-        outputs = outputs[1]
-        targets = targets[:, -1].to(torch.long)
-
-    _, pred = outputs.topk(1, 1, True)
-    pred = pred.t()
-    correct = pred.eq(targets.view(1, -1))
-    n_correct_elems = correct.float().sum().clone().detach()
-
-    out = dict()
-    if n_iou_sum is not None:
-        out['loc'] = n_iou_sum / batch_size
-    out['conf'] = n_correct_elems / batch_size
-
-    return out
-
-
 # 19.3.8 revision
 # add parameter : "device"
 def train(cur_iter, iter_per_epoch, epoch, data_loader, model, criterion, optimizer, scheduler, opt, device):
@@ -842,7 +799,7 @@ def train_dataset(opt, device, model):
     if opt.loss_type == 'KDloss':
         criterion = KDloss(loss_type=opt.KD_type)
     elif opt.loss_type == 'multiloss':
-        criterion = MultiLoss(extra_layers=True)
+        criterion = MultiLoss(extra_layers=opt.use_extra_layer, sample_duration=opt.sample_duration)
     else:
         criterion = nn.CrossEntropyLoss()
 
