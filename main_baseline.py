@@ -35,23 +35,24 @@ def get_mean(norm_value=255):
 
 
 def detection(results, boundary, sample_duration):
+    total_length = sample_duration
+
     loc, conf = results
-    loc = decoding(loc)
+    loc = decoding(loc, total_length)
     loc_numpy = loc.clone().detach().cpu().numpy()
     conf_numpy = conf.clone().detach().cpu().numpy()
     boundary = boundary.clone().detach().cpu().numpy()
-    labels, frame_pos = list(), list()
+    frame_pos, labels = list(), list()
 
-    total_length = sample_duration - 1
-    # total_length = 1
-    for i, (center, length) in enumerate(loc_numpy):
-        end = int((center * 2 + length) / 2 * total_length) + boundary[i]
-        start = int((center * 2 - length) / 2 * total_length) + boundary[i]
-        frame_pos += [[start, end]]
+    for i, (start, end) in enumerate(loc_numpy):
+        res_start = int(start + boundary[i])
+        res_end = int(end + boundary[i])
+        frame_pos += [[res_start, res_end]]
+
     for row in conf_numpy:
         labels.append(np.argmax(row))
 
-    return labels, frame_pos
+    return frame_pos, labels
 
 
 def get_label(res_tensor):
@@ -59,6 +60,8 @@ def get_label(res_tensor):
     labels = list()
     for row in res_numpy:
         labels.append(np.argmax(row))
+    # labels = torch.argmax(res_tensor, 1, keepdim=True)
+
     return labels
 
 
@@ -126,7 +129,7 @@ def get_labels_from_candidate(video, temporal_length, model, spatial_transform, 
     return final_res
 
 
-def get_result(labels, frame_pos, opt):
+def get_result(frame_pos, labels, opt):
     # print(labels)
     # print(frame_pos, flush=True)
     do_origin = False
@@ -256,8 +259,8 @@ def get_result(labels, frame_pos, opt):
 
 
 def test(video_path, test_data_loader, model, device, opt):
-    labels = []
     frame_pos = []
+    labels = []
 
     do_origin = False
     if not do_origin:
@@ -281,14 +284,14 @@ def test(video_path, test_data_loader, model, device, opt):
             # 19.8.8. add
             # multiloss 일 때, 처리하는 부분 추가
             if opt.loss_type == 'multiloss':
-                label, frame_info = detection(results, boundary, opt.sample_duration)
-                labels += label
+                frame_info, label = detection(results, boundary, opt.sample_duration)
                 frame_pos += frame_info
+                labels += label
             else:
-                labels += get_label(results)
                 boundary = boundary.clone().detach().cpu().numpy()
                 for _ in boundary:
                     frame_pos.append(_+1)
+                labels += get_label(results)
 
             if (i+1) % 10 == 0 or i+1 == total_iter:
                 end_time = time.time() - batch_time
@@ -329,7 +332,7 @@ def test(video_path, test_data_loader, model, device, opt):
                 labels += get_label(results)
                 clip_batch = []
 
-    return labels, frame_pos
+    return frame_pos, labels
 
 
 def load_checkpoint(model, opt_model):
@@ -370,19 +373,20 @@ def get_pickle_dir(root_dir, opt):
     return pickle_dir
 
 
-def save_pickle(labels_path, frame_pos_path, labels, frame_pos):
-    with open(labels_path, 'wb') as f:
-        pickle.dump(labels, f)
+def save_pickle(frame_pos_path, labels_path, frame_pos, labels):
     with open(frame_pos_path, 'wb') as f:
         pickle.dump(frame_pos, f)
+    with open(labels_path, 'wb') as f:
+        pickle.dump(labels, f)
 
 
-def load_pickle(labels_path, frame_pos_path):
-    with open(labels_path, 'rb') as f:
-        labels = pickle.load(f)
+def load_pickle(frame_pos_path, labels_path):
     with open(frame_pos_path, 'rb') as f:
         frame_pos = pickle.load(f)
-    return labels, frame_pos
+    with open(labels_path, 'rb') as f:
+        labels = pickle.load(f)
+
+    return frame_pos, labels
 
 
 def test_misaeng(opt, device, model):
@@ -431,16 +435,16 @@ def test_misaeng(opt, device, model):
 
         # 이미 처리한 결과가 있다면 pickle 로드
         print("Process {}".format(idx + 1), flush=True)
-        labels_path = os.path.join(pickle_dir, video_name + is_full_data + '.labels')
         frame_pos_path = os.path.join(pickle_dir, video_name + is_full_data + '.frame_pos')
-        if not os.path.exists(labels_path) and not os.path.exists(frame_pos_path):
+        labels_path = os.path.join(pickle_dir, video_name + is_full_data + '.labels')
+        if not os.path.exists(frame_pos_path) and not os.path.exists(labels_path):
             video_path = os.path.join(root_dir, video_name)
-            labels, frame_pos = test(video_path, test_data_loader, model, device, opt)
-            save_pickle(labels_path, frame_pos_path, labels, frame_pos)
+            frame_pos, labels = test(video_path, test_data_loader, model, device, opt)
+            save_pickle(frame_pos_path, labels_path, frame_pos, labels)
         else:
-            labels, frame_pos = load_pickle(labels_path, frame_pos_path)
+            frame_pos, labels = load_pickle(frame_pos_path, labels_path)
 
-        final_res = get_result(labels, frame_pos, opt)
+        final_res = get_result(frame_pos, labels, opt)
         # print(final_res)
 
         boundary_index_final = []
@@ -540,16 +544,16 @@ def test_dataset(opt, device, model):
                                  input_type=opt.input_type, candidate=opt.candidate)
         test_data_loader = torch.utils.data.DataLoader(test_data, batch_size=opt.batch_size,
                                                        num_workers=opt.n_threads, pin_memory=True)
-        labels_path = os.path.join(pickle_dir, video_name + is_full_data + '.labels')
         frame_pos_path = os.path.join(pickle_dir, video_name + is_full_data + '.frame_pos')
-        if not os.path.exists(labels_path) and not os.path.exists(frame_pos_path):
+        labels_path = os.path.join(pickle_dir, video_name + is_full_data + '.labels')
+        if not os.path.exists(frame_pos_path) and not os.path.exists(labels_path):
             video_path = os.path.join(root_dir, video_name)
-            labels, frame_pos = test(video_path, test_data_loader, model, device, opt)
-            save_pickle(labels_path, frame_pos_path, labels, frame_pos)
+            frame_pos, labels = test(video_path, test_data_loader, model, device, opt)
+            save_pickle(frame_pos_path, labels_path, frame_pos, labels)
         else:
-            labels, frame_pos = load_pickle(labels_path, frame_pos_path)
+            frame_pos, labels = load_pickle(frame_pos_path, labels_path)
 
-        final_res = get_result(labels, frame_pos, opt)
+        final_res = get_result(frame_pos, labels, opt)
         # print(final_res)
 
         _res = {'cut': [], 'gradual': []}
@@ -647,7 +651,7 @@ def train(cur_iter, iter_per_epoch, epoch, data_loader, model, criterion, optimi
             if opt.loss_type in ['KDloss']:
                 outputs = outputs[1]
 
-            acc = calculate_accuracy(outputs, targets)
+            acc = calculate_accuracy(outputs, targets, opt.sample_duration)
             for key in keys:
                 avg_acc[key] += acc[key] / 10
                 epoch_acc[key] += acc[key] / iter_per_epoch
