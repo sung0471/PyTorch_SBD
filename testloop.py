@@ -261,3 +261,9 @@ for sample_duration in default_bar_number_list.keys():
             count += 1
         length *= 2
 print(default_bar)
+
+test = torch.Tensor([10.0, 10.0])
+test_ = torch.Tensor([10.0, 10.0])
+test /= 3 * 2
+test_ /= (3 * 2)
+print(test, test_)
