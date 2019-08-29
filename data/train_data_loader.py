@@ -91,21 +91,20 @@ def make_dataset(root_path, video_list_path, sample_duration, is_full_data, loss
                 #         continue
 
             gts = list()
-            total_length = sample_duration - 1
             if loss_type == 'multiloss':
                 if label != 0:
                     for i in range(4, len(words), 2):
-                        gt_start = float(words[i])-begin if float(words[i])-begin >= 0 else 0.0
-                        gt_end = float(words[i + 1])-begin if float(words[i + 1])-begin < sample_duration else float(total_length)
-                        gts.append((
-                            # int(gt_start), int(gt_end)
-                            gt_start / total_length, gt_end / total_length
-                        ))
+                        gt_start = float(words[i]) - begin \
+                            if float(words[i]) - begin >= 0 else 0.0
+                        gt_end = float(words[i + 1]) - begin \
+                            if float(words[i + 1]) - begin < sample_duration else float(sample_duration - 1)
+                        gts.append([
+                            gt_start, gt_end
+                        ])
                 else:
-                    gts.append((
-                        # 0, 15
-                        0.0, 15.0 / total_length
-                    ))
+                    gts.append([
+                        0.0, 15.0
+                    ])
             info["gt_intervals"] = gts
             info["sample_duration"] = sample_duration
             video_list.append(info)
@@ -177,9 +176,9 @@ class DataSet(data.Dataset):
 
         if len(gts) == 1 and len(gts[0]) == 2:
             target = (
-                         (gts[0][1] + gts[0][0])/2,
-                         gts[0][1] - gts[0][0],
-                         label
+                gts[0][0],
+                gts[0][1],
+                label
             )
             target = torch.Tensor(target)
 
