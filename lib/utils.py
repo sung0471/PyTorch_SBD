@@ -48,23 +48,21 @@ def load_value_file(file_path):
     return value
 
 
-def calculate_accuracy(outputs, targets):
+def calculate_accuracy(outputs, targets, sample_duration):
     batch_size = targets.size(0)
+    total_length = sample_duration
 
     n_iou_sum = None
     if targets.dim() > 1:
         loc_pred = outputs[0].clone().detach()
-        loc_pred = decoding(loc_pred)
-        loc_target = targets[:, :-1]
-        iou = list()
-        for i in range(batch_size):
-            pred_end = (loc_pred[i][0] * 2 + loc_pred[i][1]) / 2
-            pred_start = (loc_pred[i][0] * 2 - loc_pred[i][1]) / 2
-            target_end = (loc_target[i][0] * 2 + loc_target[i][1]) / 2
-            target_start = (loc_target[i][0] * 2 - loc_target[i][1]) / 2
-            iou += [cal_iou((pred_start, pred_end), (target_start, target_end))]
-        iou = torch.Tensor(iou).to(torch.float)
-        n_iou_sum = iou.float().sum().clone().detach()
+        loc_pred = decoding(loc_pred, total_length)
+        loc_target = targets[:, :-1].clone().detach()
+        # iou = list()
+        # for i in range(batch_size):
+        #     iou += [cal_iou(loc_pred[i], loc_target[i])]
+        # iou = torch.Tensor(iou).to(torch.float)
+        iou = cal_iou(loc_pred, loc_target)
+        n_iou_sum = iou.sum().clone().detach().data
 
         outputs = outputs[1]
         targets = targets[:, -1].to(torch.long)
@@ -82,26 +80,56 @@ def calculate_accuracy(outputs, targets):
     return out
 
 
-def encoding(loc):
+def encoding(loc, total_length, default_bar=None):
     variances = [0.1, 0.2]
-    loc[:, 0] = loc[:, 0] / variances[0]
-    loc[:, 1] = torch.log(loc[:, 1]) / variances[1]
-    return loc
 
+    if default_bar is None:
+        center = (loc[:, 1] + loc[:, 0]) / 2
+        center /= variances[0] * total_length
+        center = center.view(-1, 1)
 
-def decoding(loc):
-    variances = [0.1, 0.2]
-    loc[:, 0] = loc[:, 0] * variances[0]
-    loc[:, 1] = torch.exp(loc[:, 1] * variances[1])
-    return loc
-
-
-def cal_iou(set1, set2):
-    start1, end1 = set1
-    start2, end2 = set2
-    if start1 < start2 < end1:
-        return (end1 - start2 + 1) / (end2 - start1 + 1)
-    elif start2 < start1 < end2:
-        return (end2 - start1 + 1) / (end1 - start2 + 1)
+        length = loc[:, 1] - loc[:, 0]
+        length = torch.log(length / total_length) / variances[1]
+        length = length.view(-1, 1)
     else:
-        return 0.0
+        pass
+
+    return torch.cat([center, length], 1)
+
+
+def decoding(loc, total_length, default_bar=None):
+    variances = [0.1, 0.2]
+
+    if default_bar is None:
+        center = loc[:, 0] * variances[0] * total_length
+        length = torch.exp(loc[:, 1] * variances[1]) * total_length
+
+        start = center - length / 2
+        start = start.view(-1, 1)
+
+        end = center + length / 2
+        end = end.view(-1, 1)
+    else:
+        pass
+
+    return torch.cat([start, end], 1)
+
+
+def cal_iou(loc_pred, loc_target):
+    inter_start = torch.max(loc_pred[:, 0], loc_target[:, 0])
+    inter_end = torch.min(loc_pred[:, 1], loc_target[:, 1])
+    inter = torch.clamp((inter_end - inter_start), min=0)
+    area_a = loc_pred[:, 1] - loc_pred[:, 0]
+    area_b = loc_target[:, 1] - loc_target[:, 0]
+    union = area_a + area_b - inter
+
+    return inter / union
+
+    # start1, end1 = set1
+    # start2, end2 = set2
+    # if start1 < start2 < end1:
+    #     return (end1 - start2 + 1) / (end2 - start1 + 1)
+    # elif start2 < start1 < end2:
+    #     return (end2 - start1 + 1) / (end1 - start2 + 1)
+    # else:
+    #     return 0.0
