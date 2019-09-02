@@ -15,7 +15,7 @@ from data.test_data_loader import DataSet as test_DataSet
 import time
 import datetime
 
-from lib.utils import AverageMeter, calculate_accuracy, decoding
+from lib.utils import AverageMeter, calculate_accuracy
 from modules.teacher_student_module import TeacherStudentModule
 from modules.knowledge_distillation_loss import KDloss
 from modules.multiloss import MultiLoss
@@ -32,27 +32,6 @@ import eval_res
 
 def get_mean(norm_value=255):
     return [114.7748 / norm_value, 107.7354 / norm_value, 99.4750 / norm_value]
-
-
-def detection(results, boundary, sample_duration):
-    total_length = sample_duration
-
-    loc, conf = results
-    loc = decoding(loc, total_length)
-    loc_numpy = loc.clone().detach().cpu().numpy()
-    conf_numpy = conf.clone().detach().cpu().numpy()
-    boundary = boundary.clone().detach().cpu().numpy()
-    frame_pos, labels = list(), list()
-
-    for i, (start, end) in enumerate(loc_numpy):
-        res_start = int(start + boundary[i])
-        res_end = int(end + boundary[i])
-        frame_pos += [[res_start, res_end]]
-
-    for row in conf_numpy:
-        labels.append(np.argmax(row))
-
-    return frame_pos, labels
 
 
 def get_label(res_tensor):
@@ -276,7 +255,6 @@ def test(video_path, test_data_loader, model, device, opt):
             #     clip = clip.cuda(device, non_blocking=True)
             with torch.no_grad():
                 clip = clip.to(device, non_blocking=True)
-            results = model(clip)
             # # if use teacher student network, only get result of student network output
             # if opt.loss_type == 'KDloss':
             #     results = results[1]
@@ -284,10 +262,12 @@ def test(video_path, test_data_loader, model, device, opt):
             # 19.8.8. add
             # multiloss 일 때, 처리하는 부분 추가
             if opt.loss_type == 'multiloss':
-                frame_info, label = detection(results, boundary, opt.sample_duration)
-                frame_pos += frame_info
-                labels += label
+                frame_info, label = model(clip, boundary)
+
+                frame_pos += frame_info.clone().detach().cpu().numpy()
+                labels += label.clone().detach().cpu().numpy()
             else:
+                results = model(clip)
                 boundary = boundary.clone().detach().cpu().numpy()
                 for _ in boundary:
                     frame_pos.append(_+1)
@@ -651,7 +631,7 @@ def train(cur_iter, iter_per_epoch, epoch, data_loader, model, criterion, optimi
             if opt.loss_type in ['KDloss']:
                 outputs = outputs[1]
 
-            acc = calculate_accuracy(outputs, targets, opt.sample_duration)
+            acc = calculate_accuracy(outputs, targets, opt.sample_duration, device)
             for key in keys:
                 avg_acc[key] += acc[key] / 10
                 epoch_acc[key] += acc[key] / iter_per_epoch
@@ -803,7 +783,8 @@ def train_dataset(opt, device, model):
     if opt.loss_type == 'KDloss':
         criterion = KDloss(loss_type=opt.KD_type)
     elif opt.loss_type == 'multiloss':
-        criterion = MultiLoss(extra_layers=opt.use_extra_layer, sample_duration=opt.sample_duration)
+        criterion = MultiLoss(device=device, extra_layers=opt.use_extra_layer,
+                              sample_duration=opt.sample_duration, num_classes=opt.n_classes, neg_ratio=3)
     else:
         criterion = nn.CrossEntropyLoss()
 
