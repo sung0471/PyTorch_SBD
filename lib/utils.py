@@ -48,15 +48,26 @@ def load_value_file(file_path):
     return value
 
 
-def calculate_accuracy(outputs, targets, sample_duration):
+def calculate_accuracy(outputs, targets, sample_duration, device):
     batch_size = targets.size(0)
-    total_length = sample_duration
+    total_length = sample_duration - 1
 
     n_iou_sum = None
     if targets.dim() > 1:
-        loc_pred = outputs[0].clone().detach()
-        loc_pred = decoding(loc_pred, total_length)
-        loc_target = targets[:, :-1].clone().detach()
+        loc_out = outputs[0].clone().detach()
+        if loc_out.dim() == 2:
+            # loc_out = [batch_size, 2]
+            # targets = [batch_size, 3]
+            loc_pred = decoding(loc_out, total_length)
+            loc_target = targets[:, :-1].clone().detach()
+        else:
+            # loc_out = [batch_size, default_bar_num, 2]
+            # targets = [batch_size, 3]
+            loc_pred = torch.zeros(batch_size, loc_out.size(1), loc_out.size(2)).to(device)
+            for i in range(batch_size):
+                loc_pred[i, :] = decoding(loc_out[i], total_length, default_bar=default_bar(sample_duration).to(device))
+            loc_target = targets.unsqueeze(1)[:, :, :-1].expand(batch_size, loc_out.size(1), loc_out.size(2))
+
         # iou = list()
         # for i in range(batch_size):
         #     iou += [cal_iou(loc_pred[i], loc_target[i])]
@@ -80,56 +91,133 @@ def calculate_accuracy(outputs, targets, sample_duration):
     return out
 
 
+def get_coordinate(loc):
+    # loc = number * [center, length]
+    start = loc[:, 0] - loc[:, 1] / 2
+    end = loc[:, 0] + loc[:, 1] / 2
+    return torch.cat((start.view(-1, 1),    # start
+                      end.view(-1, 1)), 1)  # end
+
+
+def get_center_length(loc):
+    # loc = number * [start, end]
+    center = (loc[:, 1] + loc[:, 0]) / 2
+    length = loc[:, 1] - loc[:, 0]
+    return torch.cat((center.view(-1, 1),       # center
+                      length.view(-1, 1)), 1)   # length
+
+
 def encoding(loc, total_length, default_bar=None):
     variances = [0.1, 0.2]
 
+    loc_data = get_center_length(loc)
     if default_bar is None:
-        center = (loc[:, 1] + loc[:, 0]) / 2
-        center /= variances[0] * total_length
-        center = center.view(-1, 1)
-
-        length = loc[:, 1] - loc[:, 0]
-        length = torch.log(length / total_length) / variances[1]
-        length = length.view(-1, 1)
+        # loc = [batch_size, 2] : start, end
+        # loc_data = [batch_size, 2] : center, length
+        center = loc_data[:, 0] / (variances[0] * total_length)
+        length = torch.log(loc_data[:, 1] / total_length) / variances[1]
     else:
-        pass
+        # loc = [default_bar_num, 2] : start, end
+        # loc_data = [default_bar_num, 2] : center, length
+        default = get_center_length(default_bar)
 
-    return torch.cat([center, length], 1)
+        center = (loc_data[:, 0] - default[:, 0]) / (variances[0] * default[:, 1])
+        length = torch.log(loc_data[:, 1] / default[:, 1]) / variances[1]
+
+    return torch.cat((center.view(-1, 1), length.view(-1, 1)), 1)
 
 
 def decoding(loc, total_length, default_bar=None):
     variances = [0.1, 0.2]
 
     if default_bar is None:
+        # loc = [batch_size, 2] : center, length
         center = loc[:, 0] * variances[0] * total_length
         length = torch.exp(loc[:, 1] * variances[1]) * total_length
-
-        start = center - length / 2
-        start = start.view(-1, 1)
-
-        end = center + length / 2
-        end = end.view(-1, 1)
     else:
-        pass
+        # loc = [default_bar_num, 2] : center, length
+        default = get_center_length(default_bar)
 
-    return torch.cat([start, end], 1)
+        center = loc[:, 0] * variances[0] * default[:, 1] + default[:, 0]
+        length = torch.exp(loc[:, 1] * variances[1]) * default[:, 1]
+
+    center = center.view(-1, 1)
+    length = length.view(-1, 1)
+
+    new_loc = torch.cat((center, length), 1)
+
+    return get_coordinate(new_loc)
 
 
-def cal_iou(loc_pred, loc_target):
-    inter_start = torch.max(loc_pred[:, 0], loc_target[:, 0])
-    inter_end = torch.min(loc_pred[:, 1], loc_target[:, 1])
-    inter = torch.clamp((inter_end - inter_start), min=0)
-    area_a = loc_pred[:, 1] - loc_pred[:, 0]
-    area_b = loc_target[:, 1] - loc_target[:, 0]
+def cal_iou(loc_a, loc_b, default_num=None):
+    if default_num is None:
+        inter_start = torch.max(loc_a[:, 0], loc_b[:, 0])
+        inter_end = torch.min(loc_a[:, 1], loc_b[:, 1])
+        inter = torch.clamp((inter_end - inter_start), min=0)
+        area_a = loc_a[:, 1] - loc_a[:, 0]
+        area_b = loc_b[:, 1] - loc_b[:, 0]
+    else:
+        truths = loc_a.view(-1, 1, 2)
+        default = loc_b.view(1, -1, 2)
+        A = truths.size(0)
+        B = default.size(1)
+
+        inter_start = torch.max(truths[:, :, 0].unsqueeze(2).expand(A, B, 1),
+                                default[:, :, 0].unsqueeze(2).expand(A, B, 1))
+        inter_end = torch.min(truths[:, :, 1].unsqueeze(2).expand(A, B, 1),
+                              default[:, :, 1].unsqueeze(2).expand(A, B, 1))
+        inter = torch.clamp((inter_end - inter_start), min=0)
+        inter = inter.squeeze(inter.dim() - 1)
+        area_a = (truths[:, :, 1] - truths[:, :, 0]).expand_as(inter)       # [A,B]
+        area_b = (default[:, :, 1] - default[:, :, 0]).expand_as(inter)     # [A,B]
+
     union = area_a + area_b - inter
 
     return inter / union
 
-    # start1, end1 = set1
-    # start2, end2 = set2
-    # if start1 < start2 < end1:
-    #     return (end1 - start2 + 1) / (end2 - start1 + 1)
-    # elif start2 < start1 < end2:
-    #     return (end2 - start1 + 1) / (end1 - start2 + 1)
-    # else:
-    #     return 0.0
+
+def log_sum_exp(x):
+    """Utility function for computing log_sum_exp while determining
+    This will be used to determine unaveraged confidence loss across
+    all examples in a batch.
+    Args:
+        x (tensor): conf_preds from conf layers
+    """
+    x_max = x.data.max()
+    return torch.log(torch.sum(torch.exp(x - x_max), 1, keepdim=True)) + x_max
+
+
+def channel_list(sample_duration=16):
+    assert sample_duration in [16, 32]
+
+    channel_l = dict()
+    channel_l[16] = [(2048, 512, 1024), (1024, 256, 512), (512, 128, 256)]
+    channel_l[32] = [(2048, 512, 1024), (1024, 256, 512), (512, 128, 256), (256, 128, 256)]
+
+    return channel_l[sample_duration]
+
+
+def default_bar(sample_duration=16):
+    assert sample_duration in [16, 32]
+    default_bar_number_list = dict()
+    default_bar_number_list[16] = [15, 7, 3, 1]
+    default_bar_number_list[32] = [31, 15, 7, 3, 1]
+    default_bar_list = dict()
+    default_bar_list[16] = torch.zeros(26, 2)
+    default_bar_list[32] = torch.zeros(57, 2)
+
+    for key in default_bar_number_list.keys():
+        count = 0
+        length = 2
+        for default_bar_number in default_bar_number_list[key]:
+            for start in range(default_bar_number):
+                default_bar_list[key][count][0] = start * (length / 2)
+                default_bar_list[key][count][1] = start * (length / 2) + length - 1
+                count += 1
+            length *= 2
+
+    return default_bar_list[sample_duration]
+
+
+if __name__ == '__main__':
+    print(default_bar(16), default_bar(32))
