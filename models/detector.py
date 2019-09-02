@@ -129,8 +129,8 @@ class Bottleneck(nn.Module):
 
 
 class ResNet(nn.Module):
-    def __init__(self, block, layers, sample_size, sample_duration,
-                 shortcut_type='B', num_classes=400, use_depthwise=False, loss_type=None, use_extra_layer=False):
+    def __init__(self, block, layers, sample_size, sample_duration, shortcut_type='B',
+                 num_classes=400, use_depthwise=False, loss_type=None, use_extra_layer=False, phase='train'):
         self.inplanes = 64
         self.Detector_layer = None
         if loss_type == 'multiloss':
@@ -152,7 +152,8 @@ class ResNet(nn.Module):
         kernel_size = (last_duration, last_size, last_size)
         if self.Detector_layer is not None:
             self.Detector_layer = self.Detector_layer(block, 512, kernel_size=kernel_size,
-                                                      num_classes=num_classes, extra_layers=use_extra_layer)
+                                                      num_classes=num_classes, extra_layers=use_extra_layer,
+                                                      phase=phase)
         else:
             self.avgpool = nn.AvgPool3d(kernel_size, stride=1)
             self.fc = nn.Linear(512 * block.expansion, num_classes)
@@ -190,7 +191,7 @@ class ResNet(nn.Module):
 
         return nn.Sequential(*layers)
 
-    def forward(self, x):
+    def forward(self, x, boundaries=None):
         # x = x.cuda()
         # x = x.to(device)
 
@@ -205,7 +206,7 @@ class ResNet(nn.Module):
         x = self.layer4(x)
 
         if self.Detector_layer is not None:
-            out = self.Detector_layer(x)
+            out = self.Detector_layer(x, boundaries)
         else:
             x = self.avgpool(x)
 
@@ -282,8 +283,8 @@ class ResNeXtBottleneck(nn.Module):
 
 
 class ResNeXt(nn.Module):
-    def __init__(self, block, layers, sample_size, sample_duration, shortcut_type='B',
-                 cardinality=32, num_classes=400, use_depthwise=False, loss_type=None, use_extra_layer=False):
+    def __init__(self, block, layers, sample_size, sample_duration, shortcut_type='B', cardinality=32,
+                 num_classes=400, use_depthwise=False, loss_type=None, use_extra_layer=False, phase='train'):
         self.inplanes = 64
         self.DS_Conv3d = None
         if use_depthwise:
@@ -307,7 +308,8 @@ class ResNeXt(nn.Module):
         kernel_size = (last_duration, last_size, last_size)
         if self.Detector_layer is not None:
             self.Detector_layer = self.Detector_layer(block, cardinality * 32, kernel_size=kernel_size,
-                                                      num_classes=num_classes, extra_layers=use_extra_layer)
+                                                      num_classes=num_classes, extra_layers=use_extra_layer,
+                                                      phase=phase)
         else:
             self.avgpool = nn.AvgPool3d(kernel_size, stride=1)
             self.fc = nn.Linear(cardinality * 32 * block.expansion, num_classes)
@@ -344,7 +346,7 @@ class ResNeXt(nn.Module):
 
         return nn.Sequential(*layers)
 
-    def forward(self, x):
+    def forward(self, x, boundaries=None):
         # x = x.to(device)
         # x = x.cuda()
         x = self.conv1(x)
@@ -358,7 +360,7 @@ class ResNeXt(nn.Module):
         x = self.layer4(x)
 
         if self.Detector_layer is not None:
-            out = self.Detector_layer(x)
+            out = self.Detector_layer(x, boundaries)
         else:
             x = self.avgpool(x)
 
