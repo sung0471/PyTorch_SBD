@@ -31,13 +31,20 @@ def generate_model(opt, model_type):
             model = detector.get_detector(opt.baseline_model, opt.model_depth,
                                           num_classes=opt.n_classes, sample_size=opt.sample_size,
                                           sample_duration=opt.sample_duration, use_depthwise=False,
-                                          loss_type=opt.loss_type, use_extra_layer=opt.use_extra_layer)
+                                          loss_type=opt.loss_type, use_extra_layer=opt.use_extra_layer,
+                                          phase=opt.phase)
 
     # 19.7.31. add deepcopy
     test_model = copy.deepcopy(model)
 
     for_test_tensor = torch.randn(opt.batch_size, 3, opt.sample_duration, opt.sample_size, opt.sample_size)
-    flops, params = profile(test_model, inputs=(for_test_tensor,))
+    if not opt.use_extra_layer:
+        flops, params = profile(test_model, inputs=(for_test_tensor,))
+    else:
+        start_boundaries = torch.zeros(opt.batch_size)
+        for i in range(opt.batch_size):
+            start_boundaries[i] = i * opt.sample_duration / 2
+        flops, params = profile(test_model, inputs=(for_test_tensor, start_boundaries))
     print('Model : {}, (FLOPS: {}, Params: {})'.format(model_type, flops, params))
 
     return model
