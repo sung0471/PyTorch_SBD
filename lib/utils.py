@@ -4,6 +4,7 @@ import torch
 
 class AverageMeter(object):
     """Computes and stores the average and current value"""
+
     def __init__(self):
         self.reset()
 
@@ -153,23 +154,25 @@ def cal_iou(loc_a, loc_b, default_num=None):
     if default_num is None:
         inter_start = torch.max(loc_a[:, 0], loc_b[:, 0])
         inter_end = torch.min(loc_a[:, 1], loc_b[:, 1])
-        inter = torch.clamp((inter_end - inter_start), min=0)
-        area_a = loc_a[:, 1] - loc_a[:, 0]
-        area_b = loc_b[:, 1] - loc_b[:, 0]
+        inter = inter_end - inter_start + 1
+        inter = torch.clamp(inter, min=0)
+        area_a = loc_a[:, 1] - loc_a[:, 0] + 1
+        area_b = loc_b[:, 1] - loc_b[:, 0] + 1
     else:
         truths = loc_a.view(-1, 1, 2)
         default = loc_b.view(1, -1, 2)
         A = truths.size(0)
         B = default.size(1)
 
-        inter_start = torch.max(truths[:, :, 0].unsqueeze(2).expand(A, B, 1),
+        inter_start = torch.max(truths[:, :, 0].unsqueeze(2).expand(A, B, 1),   # [A, B, 1]
                                 default[:, :, 0].unsqueeze(2).expand(A, B, 1))
-        inter_end = torch.min(truths[:, :, 1].unsqueeze(2).expand(A, B, 1),
+        inter_end = torch.min(truths[:, :, 1].unsqueeze(2).expand(A, B, 1),     # [A, B, 1]
                               default[:, :, 1].unsqueeze(2).expand(A, B, 1))
-        inter = torch.clamp((inter_end - inter_start), min=0)
-        inter = inter.squeeze(inter.dim() - 1)
-        area_a = (truths[:, :, 1] - truths[:, :, 0]).expand_as(inter)       # [A,B]
-        area_b = (default[:, :, 1] - default[:, :, 0]).expand_as(inter)     # [A,B]
+        inter = inter_end - inter_start + 1         # [A, B, 1]
+        inter = torch.clamp(inter, min=0)
+        inter = inter.squeeze(inter.dim() - 1)      # [A, B]
+        area_a = (truths[:, :, 1] - truths[:, :, 0] + 1).expand_as(inter)       # [A,B]
+        area_b = (default[:, :, 1] - default[:, :, 0] + 1).expand_as(inter)     # [A,B]
 
     union = area_a + area_b - inter
 
@@ -217,6 +220,62 @@ def default_bar(sample_duration=16):
             length *= 2
 
     return default_bar_list[sample_duration]
+
+
+# Original author: Francisco Massa:
+# https://github.com/fmassa/object-detection.torch
+# Ported to PyTorch by Max deGroot (02/01/2017)
+def nms(bars, scores, overlap=0.5, top_k=200):
+    """Apply non-maximum suppression at test time to avoid detecting too many
+    overlapping bounding boxes for a given object.
+    Args:
+        bars: (tensor) The location preds for the img, Shape: [num_priors,2].
+        scores: (tensor) The class predscores for the img, Shape:[num_priors].
+        overlap: (float) The overlap thresh for suppressing unnecessary boxes.
+        top_k: (int) The Maximum number of box preds to consider.
+    Return:
+        The indices of the kept boxes with respect to num_priors.
+    """
+
+    # num : conf > 0.01인 default_bar의 갯수
+    # bars = [num, 2] / scores = [num]
+    # overlap = nms_threshold(0.45) / top_k = 5(default)
+    keep = scores.new_zeros(scores.size(0)).to(torch.long)
+    if bars.numel() == 0:   # number of elements
+        return keep
+    start = bars[:, 0]      # [num]
+    end = bars[:, 1]        # [num]
+    length = end - start + 1    # [num]
+    v, idx = scores.sort(0)  # sort in ascending order
+    # I = I[v >= 0.01]
+    idx = idx[-top_k:]  # indices of the top-k largest vals
+
+    # keep = torch.Tensor()
+    count = 0
+    while idx.numel() > 0:
+        i = idx[-1]  # index of current largest val
+        # keep.append(i)
+        keep[count] = i
+        count += 1
+        if idx.size(0) == 1:
+            break
+        idx = idx[:-1]  # remove kept element from view
+        # load bars of next highest vals
+        ss = torch.index_select(start, 0, idx)   # [--num]
+        ee = torch.index_select(end, 0, idx)     # [--num]
+        # store element-wise max with next highest score
+        ss = torch.clamp(ss, min=start[i].data)      # [--num]
+        ee = torch.clamp(ee, max=end[i].data)        # [--num]
+        l = ee - ss + 1     # [--num]
+        # check length.. after each iteration
+        inter = torch.clamp(l, min=0.0)         # [--num]
+        # IoU = i / (area(a) + area(b) - i)
+        rem_lengths = torch.index_select(length, 0, idx)  # [--num], load remaining lengths, not include top_1
+        union = length[i] + rem_lengths - inter
+        IoU = inter / union  # store result in iou
+        # keep only elements with an IoU <= overlap
+        idx = idx[IoU.le(overlap)]
+    return keep, count
 
 
 if __name__ == '__main__':
