@@ -28,7 +28,7 @@ def parse_opts():
                         help='if iter=0, adjust automatic, elif iter>0, set this value')
     parser.add_argument('--epoch', default=5, type=int)
     parser.add_argument('--model', default='detector', type=str, help='alexnet | resnet | resnext | detector')
-    parser.add_argument('--use_extra_layer', default=False, help='if model==detector, use (True | False)')
+    parser.add_argument('--use_extra_layer', default=True, help='if model==detector, use (True | False)')
     parser.add_argument('--baseline_model', default='resnet', type=str,
                         help='if you use detector, select baseline model(alexnet, resnet, resnext)')
     parser.add_argument('--model_depth', default=50, type=int,
