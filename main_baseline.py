@@ -35,11 +35,12 @@ def get_mean(norm_value=255):
 
 
 def get_label(res_tensor):
-    res_numpy = res_tensor.clone().detach().cpu().numpy()
-    labels = list()
-    for row in res_numpy:
-        labels.append(np.argmax(row))
-    # labels = torch.argmax(res_tensor, 1, keepdim=True)
+    # res_numpy = res_tensor.clone().detach().cpu().numpy()
+    # labels = list()
+    # for row in res_numpy:
+    #     labels.append(np.argmax(row))
+    res = torch.argmax(res_tensor, dim=1, keepdim=True)
+    labels = [label for label in res]
 
     return labels
 
@@ -238,8 +239,8 @@ def get_result(frame_pos, labels, opt):
 
 
 def test(video_path, test_data_loader, model, device, opt):
-    frame_pos = []
-    labels = []
+    frame_pos = list()
+    labels = list()
 
     do_origin = False
     if not do_origin:
@@ -255,6 +256,7 @@ def test(video_path, test_data_loader, model, device, opt):
             #     clip = clip.cuda(device, non_blocking=True)
             with torch.no_grad():
                 clip = clip.to(device, non_blocking=True)
+                boundary = boundary.to(device, non_blocking=True)
             # # if use teacher student network, only get result of student network output
             # if opt.loss_type == 'KDloss':
             #     results = results[1]
@@ -264,13 +266,11 @@ def test(video_path, test_data_loader, model, device, opt):
             if opt.loss_type == 'multiloss':
                 frame_info, label = model(clip, boundary)
 
-                frame_pos += frame_info.clone().detach().cpu().numpy()
-                labels += label.clone().detach().cpu().numpy()
+                frame_pos += [[start.item(), end.item()] for start, end in frame_info]
+                labels += [cls.item() for cls in label]
             else:
                 results = model(clip)
-                boundary = boundary.clone().detach().cpu().numpy()
-                for _ in boundary:
-                    frame_pos.append(_+1)
+                frame_pos = [frame.item() for frame in boundary]
                 labels += get_label(results)
 
             if (i+1) % 10 == 0 or i+1 == total_iter:
@@ -663,7 +663,7 @@ def train(cur_iter, iter_per_epoch, epoch, data_loader, model, criterion, optimi
                 }
                 torch.save(states, save_file_path)
             if i % iter_per_epoch == 0 and i != 0:
-                print("epoch {} accuracy : ".format(i / iter_per_epoch, epoch_acc), end='', flush=True)
+                print("epoch {} accuracy : ".format(i / iter_per_epoch), end='', flush=True)
                 for key in keys:
                     print('{}({}) '.format(epoch_acc[key], key), end='', flush=True)
                     total_acc[key][int(i / iter_per_epoch)-1] = float(epoch_acc[key])
@@ -917,9 +917,15 @@ def main():
     # iter_per_epoch을 opt.is_full_data와 opt.batch_size에 맞게 자동으로 조정
     if opt.iter_per_epoch == 0:
         if opt.is_full_data:
-            opt.iter_per_epoch = 500000
+            if not opt.use_extra_layer:
+                opt.iter_per_epoch = 500000
+            else:
+                opt.iter_per_epoch = 250000
         else:
-            opt.iter_per_epoch = 70000
+            if not opt.use_extra_layer:
+                opt.iter_per_epoch = 70000
+            else:
+                opt.iter_per_epoch = 34000
 
     opt.iter_per_epoch = int(opt.iter_per_epoch / opt.batch_size)
     print("iter_per_epoch : {}, batch_size : {}".format(opt.iter_per_epoch, opt.batch_size))
