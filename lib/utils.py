@@ -1,5 +1,6 @@
 import csv
 import torch
+import torch.nn as nn
 
 
 class AverageMeter(object):
@@ -53,41 +54,105 @@ def calculate_accuracy(outputs, targets, sample_duration, device):
     batch_size = targets.size(0)
     total_length = sample_duration - 1
 
-    n_iou_sum = None
+    iou_avg = None
+    n_correct_avg = None
     if targets.dim() > 1:
-        loc_out = outputs[0].clone().detach()
+        loc_out, conf_pred = outputs
+        loc_target, conf_target = targets[:, :-1], targets[:, -1].to(torch.long)
         if loc_out.dim() == 2:
-            # loc_out = [batch_size, 2]
+            # outputs = ([batch_size, 2], [batch_size, 3])
             # targets = [batch_size, 3]
             loc_pred = decoding(loc_out, total_length)
-            loc_target = targets[:, :-1].clone().detach()
+
+            # iou = list()
+            # for i in range(batch_size):
+            #     iou += [cal_iou(loc_pred[i], loc_target[i])]
+            # iou = torch.Tensor(iou).to(torch.float)
+            iou = cal_iou(loc_pred, loc_target)
+            n_iou_sum = iou.sum().clone().detach().data
+            iou_avg = n_iou_sum / batch_size
+
         else:
-            # loc_out = [batch_size, default_bar_num, 2]
+            # outputs = ([batch_size, default_bar_num, 2], [batch_size, default_bar_num, 3])
             # targets = [batch_size, 3]
-            loc_pred = torch.zeros(batch_size, loc_out.size(1), loc_out.size(2)).to(device)
-            for i in range(batch_size):
-                loc_pred[i, :] = decoding(loc_out[i], total_length, default_bar=default_bar(sample_duration).to(device))
-            loc_target = targets.unsqueeze(1)[:, :, :-1].expand(batch_size, loc_out.size(1), loc_out.size(2))
+            top_k = 5
+            outputs = (outputs[0], nn.Softmax(dim=-1)(outputs[1]))
+            output = detection(outputs, sample_duration, num_classes=3,
+                               top_k=top_k, conf_thresh=0.01, nms_thresh=0.45)
+            # output = [batch_size, num_classes, num_bars, [start, end, conf]]
+            # pred_num = [batch_size, num_classes]
+            num_classes = output.size(1)
 
-        # iou = list()
-        # for i in range(batch_size):
-        #     iou += [cal_iou(loc_pred[i], loc_target[i])]
-        # iou = torch.Tensor(iou).to(torch.float)
-        iou = cal_iou(loc_pred, loc_target)
-        n_iou_sum = iou.sum().clone().detach().data
+            # output = [batch_size, num_classes, num_bars, [start, end, conf]]
+            pred_num = torch.zeros(batch_size, num_classes, dtype=torch.int32)
+            for batch_num in range(batch_size):
+                for cls in range(num_classes):
+                    i = 0
+                    while output[batch_num, cls, i, -1] >= 0.6:
+                        i += 1
+                        if i == top_k:
+                            break
+                    pred_num[batch_num, cls] = i
 
-        outputs = outputs[1]
-        targets = targets[:, -1].to(torch.long)
+            total_bars_num = pred_num.int().sum().clone().detach().data
+            loc_pred = torch.zeros(total_bars_num, 2).to(device)
+            conf_pred = torch.zeros(total_bars_num, 1, dtype=torch.long).to(device)
 
-    _, pred = outputs.topk(1, 1, True)
-    pred = pred.t()
-    correct = pred.eq(targets.view(1, -1))
-    n_correct_elems = correct.float().sum().clone().detach()
+            iou_sum = torch.zeros(batch_size, 1).to(device)
+            num_label_sum = torch.zeros(batch_size, 1).to(device)
+            valid_bars_num = 0.0
+            for batch_num in range(batch_size):
+                bars_num_per_batch = 0
+                for cls in range(num_classes):
+                    result_num = pred_num[batch_num, cls].data
+                    for i in range(result_num):
+                        # if cls == 0:
+                        #     loc_pred[num, :] = 0
+                        # else:
+                        loc_pred[bars_num_per_batch, :] = output[batch_num, cls, i, :-1]
+                        conf_pred[bars_num_per_batch, :] = cls
+                        bars_num_per_batch += 1
+                if bars_num_per_batch == 0:
+                    continue
+                # cal_iou per batch : [bars_num_per_batch, 1]
+                iou = cal_iou(
+                    loc_pred[:bars_num_per_batch, :].data,
+                    loc_target[batch_num].data,
+                    default_num=bars_num_per_batch
+                )
+                no_background_idx = conf_pred[:bars_num_per_batch] > 0
+                no_background_iou = iou[no_background_idx]
+                iou_sum[batch_num, 0] = no_background_iou.sum().clone().detach().data
+
+                # cal_correct_label per batch
+                valid_bars_num += no_background_idx.sum().data
+                correct_idx = conf_pred[:bars_num_per_batch] == conf_target[batch_num]
+                iou_select = iou[correct_idx] > 0
+                num_label_sum[batch_num] = iou_select.sum().clone().detach().data
+            iou_avg = iou_sum.float().sum().clone().detach().data / valid_bars_num
+            n_correct_avg = num_label_sum.float().sum().clone().detach().data / valid_bars_num
+            # iou_avg, n_correct_avg == NaN, 0 할당
+            if iou_avg != iou_avg:
+                iou_avg = 0.0
+            if n_correct_avg != n_correct_avg:
+                n_correct_avg = 0.0
+    else:
+        conf_pred = outputs
+        conf_target = targets[:, -1].to(torch.long)
 
     out = dict()
-    if n_iou_sum is not None:
-        out['loc'] = n_iou_sum / batch_size
-    out['conf'] = n_correct_elems / batch_size
+    if iou_avg is not None:
+        out['loc'] = iou_avg
+
+    if n_correct_avg is None:
+        _, pred = conf_pred.topk(1, 1, True)
+        pred = pred.t()
+        correct = pred.eq(conf_target.view(1, -1))
+        n_correct_elems = correct.float().sum().clone().detach()
+
+        out['conf'] = n_correct_elems / batch_size
+    else:
+        out['conf'] = n_correct_avg
 
     return out
 
@@ -122,7 +187,7 @@ def encoding(loc, total_length, default_bar=None):
         # loc_data = [default_bar_num, 2] : center, length
         default = get_center_length(default_bar)
 
-        center = (loc_data[:, 0] - default[:, 0]) / (variances[0] * default[:, 1])
+        center = (loc_data[:, 0] - default[:, 0]) / (variances[0] * total_length * default[:, 1])
         length = torch.log(loc_data[:, 1] / default[:, 1]) / variances[1]
 
     return torch.cat((center.view(-1, 1), length.view(-1, 1)), 1)
@@ -139,7 +204,7 @@ def decoding(loc, total_length, default_bar=None):
         # loc = [default_bar_num, 2] : center, length
         default = get_center_length(default_bar)
 
-        center = loc[:, 0] * variances[0] * default[:, 1] + default[:, 0]
+        center = loc[:, 0] * variances[0] * total_length * default[:, 1] + default[:, 0]
         length = torch.exp(loc[:, 1] * variances[1]) * default[:, 1]
 
     center = center.view(-1, 1)
@@ -152,6 +217,8 @@ def decoding(loc, total_length, default_bar=None):
 
 def cal_iou(loc_a, loc_b, default_num=None):
     if default_num is None:
+        A = loc_a.size(0)
+        B = loc_b.size(1)
         inter_start = torch.max(loc_a[:, 0], loc_b[:, 0])
         inter_end = torch.min(loc_a[:, 1], loc_b[:, 1])
         inter = inter_end - inter_start + 1
@@ -176,7 +243,7 @@ def cal_iou(loc_a, loc_b, default_num=None):
 
     union = area_a + area_b - inter
 
-    return inter / union
+    return (inter / union).view(A, B)
 
 
 def log_sum_exp(x):
@@ -276,6 +343,63 @@ def nms(bars, scores, overlap=0.5, top_k=200):
         # keep only elements with an IoU <= overlap
         idx = idx[IoU.le(overlap)]
     return keep, count
+
+
+def detection(out, sample_duration, num_classes, top_k, conf_thresh, nms_thresh):
+    loc, conf = out
+    # frame_pos = torch.zeros(loc.size(0), loc.size(1), loc.size(2))
+    # labels = torch.zeros(conf.size(0), conf.size(1), 1)
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    default = default_bar(sample_duration=sample_duration).to(device)
+    batch_size = loc.size(0)
+
+    output = torch.zeros(batch_size, num_classes, top_k, 3).to(device)
+    conf_pred = conf.transpose(2, 1)
+    for i in range(batch_size):
+        total_length = sample_duration - 1
+
+        # assert loc.size(1) == self.default_bar.size(0)
+        # frame_pos[i, :] = decoding(loc[i, :], total_length, default_bar=self.default_bar)
+        # frame_pos[i, :] += start_boundaries[i]                  # [default_num, 2]
+        # label = conf[i, :]
+        # labels[i, :] = torch.argmax(label, dim=1).view(-1, 1)   # [default_num, 1]
+
+        decoded_bars = decoding(loc[i, :], total_length, default_bar=default)  # [default_num, 2]
+        conf_scores = conf_pred[i].clone().detach()  # [3, default_num]
+
+        for cl in range(num_classes):
+            c_mask = conf_scores[cl].gt(conf_thresh)  # [default_num]
+            # for i in default_num,
+            # if conf[i] > conf_thresh, num += 1
+            scores = conf_scores[cl][c_mask]  # [num]
+            if scores.size(0) == 0:
+                continue
+            l_mask = c_mask.unsqueeze(1).expand_as(decoded_bars)  # [default_num, 2]
+            bars = decoded_bars[l_mask].view(-1, 2)  # [num, 2]
+
+            if cl == 0:
+                v, idx = scores.sort(0, descending=True)  # sort in descending order
+                total_num = idx.size(0) if idx.size(0) < top_k else top_k
+                idx = idx[:total_num]
+                output[i, cl, :total_num] = \
+                    torch.cat((bars[idx],
+                               scores[idx].unsqueeze(1)), 1)  # [top_k, 3]
+            else:
+                # idx of highest scoring and non-overlapping boxes per class
+                ids, count = nms(bars, scores, nms_thresh, top_k)
+                output[i, cl, :count] = \
+                    torch.cat((bars[ids[:count]],
+                               scores[ids[:count]].unsqueeze(1)), 1)  # [count, 3]
+
+    # [batch_size, all_result_bars_num, 3]
+    # all_result_bars_num : 클래스 별 bar의 갯수(최대 top_k * num_classes)
+    # 3 : start, end, conf
+    flt = output.contiguous().view(batch_size, -1, 3)
+    _, idx = flt[:, :, -1].sort(1, descending=True)  # [batch_size, bars_num]
+    _, rank = idx.sort(1)  # [batch_size, bars_num], 각 idx 의 등수
+    flt[(rank < top_k).unsqueeze(-1).expand_as(flt)].fill_(0)
+
+    return output
 
 
 if __name__ == '__main__':
