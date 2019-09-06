@@ -29,9 +29,8 @@ class MultiLoss(nn.Module):
             loc_target = encoding(loc_target, total_length)
             conf_target = targets[:, -1].clone().detach().to(torch.long).data
 
-            alpha = 0.5
-            loss_loc = self.reg_loss(loc_pred, loc_target) * alpha
-            loss_conf = self.conf_loss(conf_pred, conf_target) * (1. - alpha)
+            loss_loc = self.reg_loss(loc_pred, loc_target)
+            loss_conf = self.conf_loss(conf_pred, conf_target)
         else:
             # loc_pred : [batch_size, default_bar_num, 2]
             # conf_pred : [batch_size, default_bar_num, 3]
@@ -70,12 +69,12 @@ class MultiLoss(nn.Module):
                 # ensure every gt matches with its prior of max overlap
                 for j in range(best_prior_idx.size(0)):
                     best_truth_idx[best_prior_idx[j]] = j
-                matches = truths[best_truth_idx]  # Shape: [default_bar_num,2]
-                conf = labels[best_truth_idx] + 1  # Shape: [default_bar_num]
+                matches = truths[best_truth_idx]    # Shape: [default_bar_num, 2]
+                conf = labels[best_truth_idx]       # Shape: [default_bar_num]
                 conf[best_truth_overlap < 0.5] = 0  # label as background
                 assert matches.size() == self.default_bar.size(),\
-                    "matches_size : {}, default_bar_size : {}".format(matches.size(), self.default_bar.size())
-                loc = encoding(matches, total_length, default_bar=self.default_bar)
+                    "matches_size : {}, default_bar_size : {}".format(matches.size(), default.size())
+                loc = encoding(matches, total_length, default_bar=default)
                 loc_t[idx] = loc  # [default_bar_num,2] encoded offsets to learn
                 conf_t[idx] = conf.squeeze(1)  # [default_bar_num] top class label for each prior
 
@@ -124,7 +123,13 @@ class MultiLoss(nn.Module):
             loss_loc /= N
             loss_conf /= N
 
-        loss = loss_loc + loss_conf
+            # N_pos = num_pos.data.sum()
+            # N_neg = num_neg.data.sum()
+            # loss_loc /= N_pos
+            # loss_conf /= N_pos + N_neg
+
+        alpha = 0.5
+        loss = loss_loc * alpha + loss_conf * (1. - alpha)
 
         return loss
 
