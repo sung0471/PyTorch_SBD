@@ -177,6 +177,7 @@ def pytorch_tensor_test():
     tensor1[pos] = 0
     print(tensor1)
 
+
 def json_test():
     voc = {
         'num_classes': 21,
