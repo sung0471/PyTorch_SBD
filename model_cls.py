@@ -12,7 +12,7 @@ import copy
 # add parameter=model_type instead opt.model
 # 19.7.16.
 # moved from models/__init__.py
-def generate_model(opt, model_type):
+def generate_model(opt, model_type, device):
     assert model_type in ['resnet', 'alexnet', 'resnext', 'detector']
 
     if model_type == 'alexnet':
@@ -35,13 +35,13 @@ def generate_model(opt, model_type):
                                           phase=opt.phase)
 
     # 19.7.31. add deepcopy
-    test_model = copy.deepcopy(model)
+    test_model = copy.deepcopy(model).to(device)
 
-    for_test_tensor = torch.randn(opt.batch_size, 3, opt.sample_duration, opt.sample_size, opt.sample_size)
+    for_test_tensor = torch.randn(opt.batch_size, 3, opt.sample_duration, opt.sample_size, opt.sample_size).to(device)
     if not opt.use_extra_layer:
         flops, params = profile(test_model, inputs=(for_test_tensor,))
     else:
-        start_boundaries = torch.zeros(opt.batch_size)
+        start_boundaries = torch.zeros(opt.batch_size).to(device)
         for i in range(opt.batch_size):
             start_boundaries[i] = i * opt.sample_duration / 2
         flops, params = profile(test_model, inputs=(for_test_tensor, start_boundaries))
@@ -60,7 +60,7 @@ def build_model(opt, model_type, phase, device):
 
     # num_classes = opt.n_classes
     # 19.6.26. add 'model_type' parameter
-    model = generate_model(opt, model_type)
+    model = generate_model(opt, model_type, device)
 
     # model=gradual_cls(opt.sample_duration,opt.sample_size,opt.sample_size,model,num_classes)
     # print(model)
