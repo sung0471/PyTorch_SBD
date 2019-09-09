@@ -20,7 +20,7 @@ class MultiLoss(nn.Module):
         self.default_bar = default_bar(sample_duration=sample_duration)
 
     def forward(self, predictions, targets):
-        total_length = self.sample_duration - 1
+        total_length = self.sample_duration
         loc_pred, conf_pred = predictions
         if not self.extra_layers:
             # loc_pred : [batch_size, 2]
