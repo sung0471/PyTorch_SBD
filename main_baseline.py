@@ -40,7 +40,7 @@ def get_label(res_tensor):
     # for row in res_numpy:
     #     labels.append(np.argmax(row))
     res = torch.argmax(res_tensor, dim=1, keepdim=True)
-    labels = [label for label in res]
+    labels = [label.item() for label in res]
 
     return labels
 
@@ -266,17 +266,31 @@ def test(video_path, test_data_loader, model, device, opt):
             if opt.loss_type == 'multiloss':
                 frame_info, label = model(clip, boundary)
 
-                frame_pos += [[start.item(), end.item()] for start, end in frame_info]
-                labels += [cls.item() for cls in label]
+                # frame_pos += [[start.item(), end.item()] for start, end in frame_info]
+                # labels += [cls.item() for cls in label]
+                frame_pos += [frame_info.view(-1, 2)]
+                labels += [label.view(-1, 1)]
             else:
                 results = model(clip)
-                frame_pos = [frame.item() for frame in boundary]
+                frame_pos += [frame.item() for frame in boundary]
                 labels += get_label(results)
 
             if (i+1) % 10 == 0 or i+1 == total_iter:
                 end_time = time.time() - batch_time
                 print("iter {}/{} : {}".format(i + 1, total_iter, end_time), flush=True)
                 batch_time = time.time()
+
+        if opt.loss_type == 'multiloss':
+            frame_pos = torch.cat(frame_pos, 0)
+            labels = torch.cat(labels, 0)
+            # frame_pos = torch.Tensor(frame_pos).view(-1, 2)
+            # labels = torch.Tensor(labels).view(-1, 1)
+
+            all_result = torch.cat((frame_pos, labels), 1)
+            _, idx_sort = all_result[:, 0].sort(0)
+            _, rank = idx_sort.sort(0)
+            new_result = all_result[rank]
+            frame_pos, labels = new_result[:, :-1], new_result[:, -1]
     else:
         spatial_transforms = get_test_spatial_transform(opt)
         temporal_length = opt.sample_duration
@@ -515,7 +529,7 @@ def test_dataset(opt, device, model):
     epoch_time = time.time()
     for idx, video_name in enumerate(video_name_list):
         video_time = time.time()
-        print("Process {}".format(idx+1), end=' ', flush=True)
+        print("Process {} : {}".format(idx + 1, video_name), flush=True)
         test_data = test_DataSet(root_dir, video_name,
                                  spatial_transform=spatial_transform,
                                  temporal_transform=temporal_transform,
@@ -536,7 +550,7 @@ def test_dataset(opt, device, model):
         final_res = get_result(frame_pos, labels, opt)
         # print(final_res)
 
-        _res = {'cut': [], 'gradual': []}
+        _res = {'cut': list(), 'gradual': list()}
         for begin, end, label in final_res:
             if label == 2:
                 _res['cut'].append((begin, end))
@@ -938,10 +952,11 @@ def main():
             test_misaeng(opt, device, model)
         else:
             out_path = os.path.join(opt.result_dir, 'results.json')
+            out_log_path = os.path.join(opt.result_dir, 'tp_tn_fp_fn.json')
             if not os.path.exists(out_path):
                 res = test_dataset(opt, device, model)
                 json.dump(res, open(out_path, 'w'))
-            eval_res.eval(out_path, opt.gt_dir)
+            eval_res.eval(out_path, out_log_path, opt.gt_dir)
 
 
 if __name__ == '__main__':
