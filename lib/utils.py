@@ -52,7 +52,7 @@ def load_value_file(file_path):
 
 def calculate_accuracy(outputs, targets, sample_duration, device):
     batch_size = targets.size(0)
-    total_length = sample_duration - 1
+    total_length = sample_duration
 
     iou_avg = None
     n_correct_avg = None
@@ -157,20 +157,20 @@ def calculate_accuracy(outputs, targets, sample_duration, device):
     return out
 
 
-def get_coordinate(loc):
-    # loc = number * [center, length]
-    start = loc[:, 0] - loc[:, 1] / 2
-    end = loc[:, 0] + loc[:, 1] / 2
-    return torch.cat((start.view(-1, 1),    # start
-                      end.view(-1, 1)), 1)  # end
-
-
 def get_center_length(loc):
     # loc = number * [start, end]
     center = (loc[:, 1] + loc[:, 0]) / 2
-    length = loc[:, 1] - loc[:, 0]
+    length = loc[:, 1] - loc[:, 0] + 1
     return torch.cat((center.view(-1, 1),       # center
                       length.view(-1, 1)), 1)   # length
+
+
+def get_coordinate(loc):
+    # loc = number * [center, length]
+    start = loc[:, 0] - (loc[:, 1] - 1) / 2
+    end = loc[:, 0] + (loc[:, 1] - 1) / 2
+    return torch.cat((start.view(-1, 1),    # start
+                      end.view(-1, 1)), 1)  # end
 
 
 def encoding(loc, total_length, default_bar=None):
@@ -187,7 +187,7 @@ def encoding(loc, total_length, default_bar=None):
         # loc_data = [default_bar_num, 2] : center, length
         default = get_center_length(default_bar)
 
-        center = (loc_data[:, 0] - default[:, 0]) / (variances[0] * total_length * default[:, 1])
+        center = (loc_data[:, 0] - default[:, 0]) / (variances[0] * default[:, 1])
         length = torch.log(loc_data[:, 1] / default[:, 1]) / variances[1]
 
     return torch.cat((center.view(-1, 1), length.view(-1, 1)), 1)
@@ -204,7 +204,7 @@ def decoding(loc, total_length, default_bar=None):
         # loc = [default_bar_num, 2] : center, length
         default = get_center_length(default_bar)
 
-        center = loc[:, 0] * variances[0] * total_length * default[:, 1] + default[:, 0]
+        center = loc[:, 0] * variances[0] * default[:, 1] + default[:, 0]
         length = torch.exp(loc[:, 1] * variances[1]) * default[:, 1]
 
     center = center.view(-1, 1)
@@ -356,7 +356,7 @@ def detection(out, sample_duration, num_classes, top_k, conf_thresh, nms_thresh)
     output = torch.zeros(batch_size, num_classes, top_k, 3).to(device)
     conf_pred = conf.transpose(2, 1)
     for i in range(batch_size):
-        total_length = sample_duration - 1
+        total_length = sample_duration
 
         # assert loc.size(1) == self.default_bar.size(0)
         # frame_pos[i, :] = decoding(loc[i, :], total_length, default_bar=self.default_bar)
