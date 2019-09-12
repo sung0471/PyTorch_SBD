@@ -100,7 +100,8 @@ def calculate_accuracy(outputs, targets, sample_duration, device):
 
             iou_sum = torch.zeros(batch_size, 1).to(device)
             num_label_sum = torch.zeros(batch_size, 1).to(device)
-            valid_bars_num = 0.0
+            no_background_valid_bars_num = 0.0
+            all_valid_bars_num = 0.0
             for batch_num in range(batch_size):
                 bars_num_per_batch = 0
                 for cls in range(num_classes):
@@ -113,24 +114,27 @@ def calculate_accuracy(outputs, targets, sample_duration, device):
                         conf_pred[bars_num_per_batch, :] = cls
                         bars_num_per_batch += 1
                 if bars_num_per_batch == 0:
+                    iou_sum[batch_num, 0] = 0.0
+                    num_label_sum[batch_num] = 0
                     continue
                 # cal_iou per batch : [bars_num_per_batch, 1]
                 iou = cal_iou(
                     loc_pred[:bars_num_per_batch, :].data,
                     loc_target[batch_num].data,
-                    default_num=bars_num_per_batch
+                    use_default=True
                 )
                 no_background_idx = conf_pred[:bars_num_per_batch] > 0
+                no_background_valid_bars_num += no_background_idx.sum().data
                 no_background_iou = iou[no_background_idx]
                 iou_sum[batch_num, 0] = no_background_iou.sum().clone().detach().data
 
                 # cal_correct_label per batch
-                valid_bars_num += no_background_idx.sum().data
+                all_valid_bars_num += bars_num_per_batch
                 correct_idx = conf_pred[:bars_num_per_batch] == conf_target[batch_num]
                 iou_select = iou[correct_idx] > 0
                 num_label_sum[batch_num] = iou_select.sum().clone().detach().data
-            iou_avg = iou_sum.float().sum().clone().detach().data / valid_bars_num
-            n_correct_avg = num_label_sum.float().sum().clone().detach().data / valid_bars_num
+            iou_avg = iou_sum.float().sum().clone().detach().data / no_background_valid_bars_num
+            n_correct_avg = num_label_sum.float().sum().clone().detach().data / all_valid_bars_num
             # iou_avg, n_correct_avg == NaN, 0 할당
             if iou_avg != iou_avg:
                 iou_avg = 0.0
@@ -215,8 +219,8 @@ def decoding(loc, total_length, default_bar=None):
     return get_coordinate(new_loc)
 
 
-def cal_iou(loc_a, loc_b, default_num=None):
-    if default_num is None:
+def cal_iou(loc_a, loc_b, use_default=False):
+    if not use_default:
         A = loc_a.size(0)
         B = loc_b.size(1)
         inter_start = torch.max(loc_a[:, 0], loc_b[:, 0])
