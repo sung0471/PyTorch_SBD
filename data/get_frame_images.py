@@ -40,7 +40,7 @@ def get_gt_dirs(path_type, check_dataset, dataloader_name=None):
                 if p_type != 'result':
                     gt_path = os.path.join(gt_base_dir, p_type + '.json')
                 else:
-                    gt_path = os.path.join('../results/', 'results_KD_resnext-101.json')
+                    gt_path = os.path.join('../results/', 'results.json')
 
                 gts[p_type] = json.load(open(gt_path, 'r'))
         return video_name_list, gts
@@ -155,7 +155,7 @@ def get_images(path_type, video_name_list, gts):
 
                 per_video_end_time = time.time() - per_video_start_time
 
-                print('video #{} {} : {}s'.format(i, file_name, per_video_end_time), flush=True)
+                print('video #{} {} : {:.3f}s'.format(i + 1, file_name, per_video_end_time), flush=True)
             total_time = time.time() - total_start_time
             print('Total video({}) : {}'.format(p_type, datetime.timedelta(seconds=total_time)), flush=True)
 
