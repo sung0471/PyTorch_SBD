@@ -75,8 +75,8 @@ def make_dataset(root_path, video_list_path, sample_duration, opt):
             if root_path is not list:
                 # 19.9.5.
                 # use_extra_layer 이면 background GT는 학습에 관여하지 않음
-                if use_extra_layer and label == 0:
-                    continue
+                # if use_extra_layer and label == 0:
+                #     continue
                 # deepSBD_new.txt / detector.txt일 경우
                 video_dir = words[3].split('\n')[0]
                 info = {"video_path": os.path.join(root_path, video_dir, video_name),
