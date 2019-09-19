@@ -89,6 +89,12 @@ def calculate_accuracy(outputs, targets, sample_duration, device):
                 for cls in range(num_classes):
                     i = 0
                     while output[batch_num, cls, i, -1] >= 0.6:
+                        start = output[batch_num, cls, i, 0]
+                        end = output[batch_num, cls, i, 1]
+                        if 0 <= start <= 15 and 0 <= end <= 15:
+                            pass
+                        else:
+                            output[batch_num, cls, i, :-1] = torch.zeros(1, 2)
                         i += 1
                         if i == top_k:
                             break
@@ -110,9 +116,14 @@ def calculate_accuracy(outputs, targets, sample_duration, device):
                         # if cls == 0:
                         #     loc_pred[num, :] = 0
                         # else:
-                        loc_pred[bars_num_per_batch, :] = output[batch_num, cls, i, :-1]
-                        conf_pred[bars_num_per_batch, :] = cls
-                        bars_num_per_batch += 1
+                        start = output[batch_num, cls, i, 0]
+                        end = output[batch_num, cls, i, 1]
+                        if start == 0 and end == 0:
+                            continue
+                        else:
+                            loc_pred[bars_num_per_batch, :] = output[batch_num, cls, i, :-1]
+                            conf_pred[bars_num_per_batch, :] = cls
+                            bars_num_per_batch += 1
                 if bars_num_per_batch == 0:
                     iou_sum[batch_num, 0] = 0.0
                     num_label_sum[batch_num] = 0
@@ -123,16 +134,19 @@ def calculate_accuracy(outputs, targets, sample_duration, device):
                     loc_target[batch_num].data,
                     use_default=True
                 )
+                # label=1,2만 loc 정확도 체크할 때
                 no_background_idx = conf_pred[:bars_num_per_batch] > 0
                 no_background_valid_bars_num += no_background_idx.sum().data
                 no_background_iou = iou[no_background_idx]
-                iou_sum[batch_num, 0] = no_background_iou.sum().clone().detach().data
+                iou_sum[batch_num, :] = no_background_iou.sum().clone().detach().data
+                # label=0,1,2 모두 loc 정확도 체크할 때
+                # iou_sum[batch_num, :] = iou.float().sum().clone().detach().data
 
                 # cal_correct_label per batch
                 all_valid_bars_num += bars_num_per_batch
                 correct_idx = conf_pred[:bars_num_per_batch] == conf_target[batch_num]
                 iou_select = iou[correct_idx] > 0
-                num_label_sum[batch_num] = iou_select.sum().clone().detach().data
+                num_label_sum[batch_num, :] = iou_select.sum().clone().detach().data
             iou_avg = iou_sum.float().sum().clone().detach().data / no_background_valid_bars_num
             n_correct_avg = num_label_sum.float().sum().clone().detach().data / all_valid_bars_num
             # iou_avg, n_correct_avg == NaN, 0 할당
