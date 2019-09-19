@@ -31,17 +31,23 @@ class MultiLoss(nn.Module):
 
             loss_loc = self.reg_loss(loc_pred, loc_target)
             loss_conf = self.conf_loss(conf_pred, conf_target)
+
         else:
             # loc_pred : [batch_size, default_bar_num, 2]
             # conf_pred : [batch_size, default_bar_num, 3]
             batch_size = targets.size(0)
-            self.default_bar = self.default_bar.to(self.device)
             default_bar_num = self.default_bar.size(0)
             self.reg_loss = nn.SmoothL1Loss(reduction='sum')
             self.conf_loss = nn.CrossEntropyLoss(reduction='sum')
 
             loc_t = torch.Tensor(batch_size, default_bar_num, 2)
             conf_t = torch.LongTensor(batch_size, default_bar_num)
+            # wrap targets
+            with torch.no_grad():
+                self.default_bar = self.default_bar.to(self.device)
+                loc_t = loc_t.to(self.device)
+                conf_t = conf_t.to(self.device)
+
             for idx in range(batch_size):
                 truths = targets[idx, :-1].view(-1, 2).data                # [1, 2]
                 labels = targets[idx, -1].view(-1, 1).to(torch.long).data  # [1, 1]
@@ -53,7 +59,7 @@ class MultiLoss(nn.Module):
                 overlaps = cal_iou(                 # [1, default_bar_num]
                     truths,
                     default,
-                    default_bar_num
+                    use_default=True
                 )
                 # (Bipartite Matching)
                 # [1(gt_num), 1] best prior for each ground truth
@@ -70,41 +76,35 @@ class MultiLoss(nn.Module):
                 for j in range(best_prior_idx.size(0)):
                     best_truth_idx[best_prior_idx[j]] = j
                 matches = truths[best_truth_idx]    # Shape: [default_bar_num, 2]
-                conf = labels[best_truth_idx]       # Shape: [default_bar_num]
-                conf[best_truth_overlap < 0.5] = 0  # label as background
+                conf = labels[best_truth_idx] + 1   # Shape: [default_bar_num]
+                conf[best_truth_overlap < 0.5] = 0  # label as negative
                 assert matches.size() == self.default_bar.size(),\
                     "matches_size : {}, default_bar_size : {}".format(matches.size(), default.size())
                 loc = encoding(matches, total_length, default_bar=default)
                 loc_t[idx] = loc  # [default_bar_num,2] encoded offsets to learn
                 conf_t[idx] = conf.squeeze(1)  # [default_bar_num] top class label for each prior
 
-            # alpha = 0.5
-            # loss_loc = self.reg_loss(loc_pred, loc_target) * alpha
-            # loss_conf = self.conf_loss(conf_pred, conf_target) * (1. - alpha)
-
-            # wrap targets
-            with torch.no_grad():
-                loc_t = loc_t.to(self.device)
-                conf_t = conf_t.to(self.device)
-
             pos = conf_t > 0
+            loc_pos = conf_t > 1
 
             # Localization Loss (Smooth L1)
             # Shape: [batch, default_bar_num, 2]
-            pos_idx = pos.unsqueeze(pos.dim()).expand_as(loc_pred)
+            pos_idx = loc_pos.unsqueeze(loc_pos.dim()).expand_as(loc_pred)
             loc_p = loc_pred[pos_idx].view(-1, 2)
             loc_t = loc_t[pos_idx].view(-1, 2)
             loss_loc = self.reg_loss(loc_p, loc_t)
 
             # Compute max conf across batch for hard negative mining
-            # batch_conf, loss_conf : [batch_size * default_bar_num, num_classes]
+            # batch_conf : [batch_size * default_bar_num, num_classes]
+            # loss_conf : [batch_size * default_bar_num, 1]
             batch_conf = conf_pred.view(-1, self.num_classes)
+            conf_t = torch.clamp(conf_t - 1, min=0)
             loss_conf = log_sum_exp(batch_conf) - batch_conf.gather(1, conf_t.view(-1, 1))
 
             # Hard Negative Mining
             loss_conf = loss_conf.view(batch_size, -1)  # [batch_size, default_bar_num]
-            loss_conf[pos] = 0  # filter out pos boxes for now / background 아닌 conf를 filtering
-            _, loss_idx = loss_conf.sort(1, descending=True)    # conf가 큰 idx의 내림차순 : [8, 26]
+            loss_conf[pos] = 0   # filter out pos boxes for now / positive에 해당하는 bar들을 filtering
+            _, loss_idx = loss_conf.sort(1, descending=True)    # loss_conf가 큰 idx의 내림차순 : [8, 26]
             _, idx_rank = loss_idx.sort(1)  # 각 idx의 등수 : [batch_size, default_bar_num]
             num_pos = pos.long().sum(1, keepdim=True)
             num_neg = torch.clamp(self.negpos_ratio * num_pos, max=pos.size(1) - 1)     # [batch_size, 1]
