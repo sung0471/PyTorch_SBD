@@ -931,15 +931,17 @@ def main():
     # iter_per_epoch을 opt.is_full_data와 opt.batch_size에 맞게 자동으로 조정
     if opt.iter_per_epoch == 0:
         if opt.is_full_data:
-            if not opt.use_extra_layer:
-                opt.iter_per_epoch = 500000
-            else:
-                opt.iter_per_epoch = 250000
+            opt.iter_per_epoch = 500000
+            # if not opt.use_extra_layer:
+            #     opt.iter_per_epoch = 500000
+            # else:
+            #     opt.iter_per_epoch = 250000
         else:
-            if not opt.use_extra_layer:
-                opt.iter_per_epoch = 70000
-            else:
-                opt.iter_per_epoch = 34000
+            opt.iter_per_epoch = 70000
+            # if not opt.use_extra_layer:
+            #     opt.iter_per_epoch = 70000
+            # else:
+            #     opt.iter_per_epoch = 34000
 
     opt.iter_per_epoch = int(opt.iter_per_epoch / opt.batch_size)
     print("iter_per_epoch : {}, batch_size : {}".format(opt.iter_per_epoch, opt.batch_size))
