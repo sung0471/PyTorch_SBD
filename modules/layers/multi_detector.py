@@ -24,13 +24,14 @@ class MultiDetector(nn.Module):
             self.conf_pool = nn.AvgPool3d(kernel_size, stride=1)
             self.conf_fc = nn.Linear(in_channel, num_classes)
         else:
+            self.extra_layer = list()
             self.loc_layer = list()
             self.conf_layer = list()
-            self.extra_layer = list()
 
             self.channel_list = channel_list(sample_duration=self.sample_duration)
-            filter_size = (2, 1, 1)
             kernel_size = (2, kernel_size[1], kernel_size[2])
+            # kernel_size = (1, kernel_size[1], kernel_size[2])
+            filter_size = (2, 1, 1)
 
             self.loc_layer += [nn.Conv3d(in_channel, 2, kernel_size=kernel_size, padding=0, bias=False)]
             self.conf_layer += [nn.Conv3d(in_channel, num_classes, kernel_size=kernel_size, padding=0, bias=False)]
@@ -38,7 +39,6 @@ class MultiDetector(nn.Module):
                 self.extra_layer += [nn.Conv3d(in_channel, mid_channel, kernel_size=1, padding=0, bias=False)]
                 self.extra_layer += [nn.Conv3d(mid_channel, out_channel, kernel_size=3, padding=filter_size, bias=False,
                                                dilation=filter_size, stride=filter_size)]
-
                 self.loc_layer += [nn.Conv3d(out_channel, 2, kernel_size=kernel_size, padding=0, bias=False)]
                 self.conf_layer += [nn.Conv3d(out_channel, num_classes, kernel_size=kernel_size, padding=0, bias=False)]
 
@@ -65,7 +65,7 @@ class MultiDetector(nn.Module):
             # detection
             # loc[8, 2], conf[8, 3]
             if self.phase == 'test':
-                total_length = self.sample_duration - 1
+                total_length = self.sample_duration
 
                 loc, conf = out
                 loc = decoding(loc, total_length)
@@ -113,7 +113,7 @@ class MultiDetector(nn.Module):
                         i = 0
                         while output[batch_num, cls, i, -1] >= 0.6:
                             bound_start = start_boundaries[batch_num].float().data
-                            bound_end = start_boundaries[batch_num].float().data + self.sample_duration
+                            bound_end = start_boundaries[batch_num].float().data + self.sample_duration - 1
                             output_boundary = torch.round(output[batch_num, cls, i, :-1] + start_boundaries[batch_num])
                             if bound_start <= output_boundary[0] <= bound_end and bound_start <= output_boundary[1] <= bound_end:
                                 output[batch_num, cls, i, :-1] = output_boundary
@@ -143,7 +143,7 @@ class MultiDetector(nn.Module):
 
                 # frame_pos = [bars_num, 2]
                 # labels = [bars_num, 1]
-                out = (frame_pos[:num], labels[:num])
+                out = (frame_pos[:num] + 1, labels[:num])
 
         return out
 
