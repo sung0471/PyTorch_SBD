@@ -91,6 +91,11 @@ def python_test():
 
     # os.makedirs(os.path.join('test', 'test2', 'test3'))
 
+    test = [1,2,3]
+    assign = test.copy()
+    test[0]=5
+    print(test, assign)
+
 
 def pytorch_tensor_test():
     print('Test : torch.Tensor.size(), view(), cat()')
