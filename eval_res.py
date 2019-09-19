@@ -25,7 +25,7 @@ def pre_recall_f1(a, b, c):
         (1.0 if b == 0 else 0)
     recall = a / b if b != 0 else\
         (1.0 if c == 0 else 0)
-    f1 = 2 * precision * recall / (precision + recall)
+    f1 = 2 * precision * recall / (precision + recall) if (precision != 0 or recall != 0) else 0
     return precision, recall, f1
 
 
@@ -80,14 +80,16 @@ def eval(predict_path, out_log_path, gt_path):
             tp_tn_fp_fn[videoname]['cut'] = dict()
             tp_tn_fp_fn[videoname]['gradual'] = dict()
             for i, type in enumerate(transition_type):
+                precision, recall, f1 = pre_recall_f1(float(tp[i]), float(gt_len[i]), float(pred_len[i]))
                 tp_tn_fp_fn[videoname][type] = {'tp': tp[i], 'tn': tn[i], 'fp': fp[i], 'fn': fn[i],
-                                                'gt_len': gt_len[i], 'pred_len': pred_len[i]}
+                                                'gt_len': gt_len[i], 'pred_len': pred_len[i],
+                                                'precision': precision, 'recall': recall, 'f1_score': f1}
 
         else:
             print("{} not found".format(videoname))
             raise Exception()
 
-    json.dump(tp_tn_fp_fn, open(out_log_path, 'w'))
+    json.dump(tp_tn_fp_fn, open(out_log_path, 'w'), indent=2)
     print("group\tprecision\trecall\tf1score")
     print("cut\t{}\t{}\t{}".format(*pre_recall_f1(cut_correct_sum, gt_cut_sum, predict_cut_sum)))
     print("gradual\t{}\t{}\t{}".format(*pre_recall_f1(gradual_correct_sum, gt_gradual_sum, predict_gradual_sum)))
