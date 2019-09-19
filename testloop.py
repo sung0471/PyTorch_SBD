@@ -169,11 +169,18 @@ def pytorch_tensor_test():
     print('test /= 3 * 2 : {}\n'
           'test_ /= (3 * 2) : {}'.format(test, test_))
 
-    tensor1 = torch.Tensor([[1, 2], [3, 4], [5, 6], [7, 8]])
-    tensor2 = torch.Tensor([3, 0, 1, 2]).to(torch.long)
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    tensor1 = torch.Tensor([[1, 2], [3, 4], [5, 6], [7, 8]]).to(device)
+    tensor2 = torch.Tensor([2, 2, 2, 2]).to(torch.long).to(device)
     pos = tensor2 > 0
     new = tensor1[tensor2]
     print(new)
+    new_2 = tensor1[pos]
+    print(new_2)
+
+    print(tensor1, tensor2)
+    print(tensor1.gather(1, tensor2.view(-1, 1)))
+
     tensor1[pos] = 0
     print(tensor1)
 
