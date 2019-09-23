@@ -29,72 +29,87 @@ def pre_recall_f1(a, b, c):
     return precision, recall, f1
 
 
-def eval(predict_path, out_log_path, gt_path):
+def eval(predict_path, out_log_path, gt_path, train_data_type):
     predicts = json.load(open(predict_path))
     gts = json.load(open(gt_path))
     print(len(predicts))
 
-    tp_tn_fp_fn = dict()
+    if train_data_type == 'normal':
+        transition_type = ['cut', 'gradual']
+    else:
+        transition_type = [train_data_type]
 
-    cut_correct_sum = 0
-    gradual_correct_sum = 0
-    all_correct_sum = 0
-    gt_cut_sum = 0
-    gt_gradual_sum = 0
-    predict_cut_sum = 0
-    predict_gradual_sum = 0
-    transition_type = ['cut', 'gradual']
+    gt = dict()
+    predict = dict()
+    correct = dict()
+    correct_sum = dict()
+    gt_sum = dict()
+    predict_sum = dict()
+
+    tp_tn_fp_fn = dict()
+    gt_len = dict()
+    pred_len = dict()
+    tp = dict()
+    tn = dict()
+    fp = dict()
+    fn = dict()
     for videoname, labels in gts.items():
         if videoname in predicts:
             _gts = gts[videoname]['transitions']
-            gt_cuts = [(begin, end) for begin, end in _gts if end - begin == 1]
-            gt_graduals = [(begin, end) for begin, end in _gts if end - begin > 1]
+            gt['cut'] = [(begin, end) for begin, end in _gts if end - begin == 1]
+            gt['gradual'] = [(begin, end) for begin, end in _gts if end - begin > 1]
 
             _predicts = predicts[videoname]
-            predicts_cut = _predicts['cut']
-            predicts_gradual = _predicts['gradual']
+            for type in transition_type:
+                predict[type] = _predicts[type]
+                correct[type] = get_union_cnt(gt[type], predict[type])
+                if type in correct_sum.keys():
+                    correct_sum[type] += correct[type]
+                else:
+                    correct_sum[type] = 0
 
-            cut_correct = get_union_cnt(gt_cuts, predicts_cut)
-            gradual_correct = get_union_cnt(gt_graduals, predicts_gradual)
-            all_correct = get_union_cnt(predicts_cut + predicts_gradual, _gts)
+                gt_len[type] = len(gt[type])
+                pred_len[type] = len(predict[type])
 
-            cut_correct_sum += cut_correct
-            gradual_correct_sum += gradual_correct
-            all_correct_sum += all_correct
+                if type in gt_sum.keys():
+                    gt_sum[type] += gt_len[type]
+                else:
+                    gt_sum[type] = 0
+                if type in predict_sum.keys():
+                    predict_sum[type] += pred_len[type]
+                else:
+                    predict_sum[type] = 0
 
-            gt_cut_sum += len(gt_cuts)
-            gt_gradual_sum += len(gt_graduals)
+                tp[type] = correct[type]
+                tn[type] = 0
+                fp[type] = pred_len[type] - correct[type]
+                fn[type] = gt_len[type] - correct[type]
 
-            predict_cut_sum += len(predicts_cut)
-            predict_gradual_sum += len(predicts_gradual)
+            if len(transition_type) == 2:
+                correct['all'] = get_union_cnt(predict['cut'] + predict['gradual'], _gts)
+                correct_sum['all'] += correct['all']
 
             # precision = tp / (tp + fp)
             # recall = tp / (tp + fn)
-            gt_len = [len(gt_cuts), len(gt_graduals)]
-            pred_len = [len(predicts_cut), len(predicts_gradual)]
-            tp = [cut_correct, gradual_correct]
-            tn = [0, 0]
-            fp = [pred_len[0] - cut_correct, pred_len[1] - gradual_correct]
-            fn = [gt_len[0] - cut_correct, gt_len[1] - gradual_correct]
             tp_tn_fp_fn[videoname] = dict()
-            tp_tn_fp_fn[videoname]['cut'] = dict()
-            tp_tn_fp_fn[videoname]['gradual'] = dict()
-            for i, type in enumerate(transition_type):
-                precision, recall, f1 = pre_recall_f1(float(tp[i]), float(gt_len[i]), float(pred_len[i]))
-                tp_tn_fp_fn[videoname][type] = {'tp': tp[i], 'tn': tn[i], 'fp': fp[i], 'fn': fn[i],
-                                                'gt_len': gt_len[i], 'pred_len': pred_len[i],
+            for type in transition_type:
+                precision, recall, f1 = pre_recall_f1(float(tp[type]), float(gt_len[type]), float(pred_len[type]))
+                tp_tn_fp_fn[videoname][type] = {'tp': tp[type], 'tn': tn[type], 'fp': fp[type], 'fn': fn[type],
+                                                'gt_len': gt_len[type], 'pred_len': pred_len[type],
                                                 'precision': precision, 'recall': recall, 'f1_score': f1}
-
         else:
             print("{} not found".format(videoname))
             raise Exception()
 
     json.dump(tp_tn_fp_fn, open(out_log_path, 'w'), indent=2)
+
     print("group\tprecision\trecall\tf1score")
-    print("cut\t{}\t{}\t{}".format(*pre_recall_f1(cut_correct_sum, gt_cut_sum, predict_cut_sum)))
-    print("gradual\t{}\t{}\t{}".format(*pre_recall_f1(gradual_correct_sum, gt_gradual_sum, predict_gradual_sum)))
-    print("all\t{}\t{}\t{}".format(
-        *pre_recall_f1(all_correct_sum, gt_cut_sum + gt_gradual_sum, predict_cut_sum + predict_gradual_sum)))
+    for type in transition_type:
+        print("{}\t{}\t{}\t{}".format(type, *pre_recall_f1(correct_sum[type], gt_sum[type], predict_sum[type])))
+    if len(transition_type) == 2:
+        gt_sum['all'] = gt_sum['cut'] + gt_sum['gradual']
+        predict_sum['all'] = predict_sum['cut'] + predict_sum['gradual']
+        print("all\t{}\t{}\t{}".format(*pre_recall_f1(correct_sum['all'], gt_sum['all'], predict_sum['all'])))
 
 
 def candidate_eval(opt, gt_path):
