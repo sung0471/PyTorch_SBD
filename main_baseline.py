@@ -550,12 +550,20 @@ def test_dataset(opt, device, model):
         final_res = get_result(frame_pos, labels, opt)
         # print(final_res)
 
-        _res = {'cut': list(), 'gradual': list()}
+        if opt.train_data_type == 'normal':
+            _res = {'cut': list(), 'gradual': list()}
+        else:
+            _res = {opt.train_data_type: list()}
+
         for begin, end, label in final_res:
             if label == 2:
                 _res['cut'].append((begin, end))
             else:
-                _res['gradual'].append((begin, end))
+                if opt.train_data_type == 'cut':
+                    _res['cut'].append((begin, end))
+                else:
+                    _res['gradual'].append((begin, end))
+
         res[video_name] = _res
         # print(videoname," : ", _res)
 
@@ -645,7 +653,7 @@ def train(cur_iter, iter_per_epoch, epoch, data_loader, model, criterion, optimi
             if opt.loss_type in ['KDloss']:
                 outputs = outputs[1]
 
-            acc = calculate_accuracy(outputs, targets, opt.sample_duration, device)
+            acc = calculate_accuracy(outputs, targets, opt.sample_duration, opt.train_data_type, device)
             for key in keys:
                 avg_acc[key] += acc[key] / 10
                 epoch_acc[key] += acc[key] / iter_per_epoch
@@ -798,7 +806,8 @@ def train_dataset(opt, device, model):
         criterion = KDloss(loss_type=opt.KD_type)
     elif opt.loss_type == 'multiloss':
         criterion = MultiLoss(device=device, extra_layers=opt.use_extra_layer,
-                              sample_duration=opt.sample_duration, num_classes=opt.n_classes, neg_ratio=3)
+                              sample_duration=opt.sample_duration, num_classes=opt.n_classes,
+                              data_type=opt.train_data_type, neg_ratio=3)
     else:
         criterion = nn.CrossEntropyLoss()
 
@@ -946,6 +955,13 @@ def main():
     opt.iter_per_epoch = int(opt.iter_per_epoch / opt.batch_size)
     print("iter_per_epoch : {}, batch_size : {}".format(opt.iter_per_epoch, opt.batch_size))
 
+    # set n_classes automatically
+    assert opt.train_data_type in ['normal', 'cut', 'gradual']
+    if opt.train_data_type == 'normal':
+        opt.n_classes = 3
+    else:
+        opt.n_classes = 2
+
     assert opt.input_type in ['RGB', 'HSV']
     if opt.phase == 'train':
         train_dataset(opt, device, model)
@@ -958,7 +974,7 @@ def main():
             if not os.path.exists(out_path):
                 res = test_dataset(opt, device, model)
                 json.dump(res, open(out_path, 'w'))
-            eval_res.eval(out_path, out_log_path, opt.gt_dir)
+            eval_res.eval(out_path, out_log_path, opt.gt_dir, opt.train_data_type)
 
 
 if __name__ == '__main__':
