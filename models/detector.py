@@ -129,8 +129,8 @@ class Bottleneck(nn.Module):
 
 
 class ResNet(nn.Module):
-    def __init__(self, block, layers, sample_size, sample_duration, shortcut_type='B',
-                 num_classes=400, use_depthwise=False, loss_type=None, use_extra_layer=False, phase='train'):
+    def __init__(self, block, layers, sample_size, sample_duration, shortcut_type='B', num_classes=400,
+                 use_depthwise=False, loss_type=None, use_extra_layer=False, phase='train', data_type='normal'):
         self.inplanes = 64
         self.Detector_layer = None
         if loss_type == 'multiloss':
@@ -153,7 +153,7 @@ class ResNet(nn.Module):
         if self.Detector_layer is not None:
             self.Detector_layer = self.Detector_layer(block, 512, kernel_size=kernel_size,
                                                       num_classes=num_classes, extra_layers=use_extra_layer,
-                                                      phase=phase)
+                                                      phase=phase, data_type=data_type)
         else:
             self.avgpool = nn.AvgPool3d(kernel_size, stride=1)
             self.fc = nn.Linear(512 * block.expansion, num_classes)
@@ -283,8 +283,8 @@ class ResNeXtBottleneck(nn.Module):
 
 
 class ResNeXt(nn.Module):
-    def __init__(self, block, layers, sample_size, sample_duration, shortcut_type='B', cardinality=32,
-                 num_classes=400, use_depthwise=False, loss_type=None, use_extra_layer=False, phase='train'):
+    def __init__(self, block, layers, sample_size, sample_duration, shortcut_type='B', cardinality=32, num_classes=400,
+                 use_depthwise=False, loss_type=None, use_extra_layer=False, phase='train', data_type='normal'):
         self.inplanes = 64
         self.DS_Conv3d = None
         if use_depthwise:
@@ -309,7 +309,7 @@ class ResNeXt(nn.Module):
         if self.Detector_layer is not None:
             self.Detector_layer = self.Detector_layer(block, cardinality * 32, kernel_size=kernel_size,
                                                       num_classes=num_classes, extra_layers=use_extra_layer,
-                                                      phase=phase)
+                                                      phase=phase, data_type='normal')
         else:
             self.avgpool = nn.AvgPool3d(kernel_size, stride=1)
             self.fc = nn.Linear(cardinality * 32 * block.expansion, num_classes)
