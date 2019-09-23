@@ -5,7 +5,7 @@ from lib.utils import encoding, cal_iou, log_sum_exp, default_bar
 
 
 class MultiLoss(nn.Module):
-    def __init__(self, device, extra_layers=False, sample_duration=16, num_classes=3, neg_ratio=3):
+    def __init__(self, device, extra_layers=False, sample_duration=16, num_classes=3, data_type='normal', neg_ratio=3):
         super(MultiLoss, self).__init__()
 
         self.device = device
@@ -17,7 +17,7 @@ class MultiLoss(nn.Module):
         self.reg_loss = nn.SmoothL1Loss()
         # self.reg_loss = nn.MSELoss()
         self.conf_loss = nn.CrossEntropyLoss()
-        self.default_bar = default_bar(sample_duration=sample_duration)
+        self.default_bar = default_bar(sample_duration=sample_duration, data_type=data_type)
 
     def forward(self, predictions, targets):
         total_length = self.sample_duration
@@ -77,7 +77,9 @@ class MultiLoss(nn.Module):
                     best_truth_idx[best_prior_idx[j]] = j
                 matches = truths[best_truth_idx]    # Shape: [default_bar_num, 2]
                 conf = labels[best_truth_idx] + 1   # Shape: [default_bar_num]
-                conf[best_truth_overlap < 0.5] = 0  # label as negative
+                background_conf_idx = conf == 1         # get index of background
+                conf[best_truth_overlap < 0.33] = 0     # label as negative
+                conf[background_conf_idx] = 1           # set label to background
                 assert matches.size() == self.default_bar.size(),\
                     "matches_size : {}, default_bar_size : {}".format(matches.size(), default.size())
                 loc = encoding(matches, total_length, default_bar=default)
@@ -94,39 +96,43 @@ class MultiLoss(nn.Module):
             loc_t = loc_t[pos_idx].view(-1, 2)
             loss_loc = self.reg_loss(loc_p, loc_t)
 
-            # Compute max conf across batch for hard negative mining
-            # batch_conf : [batch_size * default_bar_num, num_classes]
-            # loss_conf : [batch_size * default_bar_num, 1]
-            batch_conf = conf_pred.view(-1, self.num_classes)
-            conf_t = torch.clamp(conf_t - 1, min=0)
-            loss_conf = log_sum_exp(batch_conf) - batch_conf.gather(1, conf_t.view(-1, 1))
+            do_hard_negative_mining = True
+            if do_hard_negative_mining:
+                # Compute max conf across batch for hard negative mining
+                # batch_conf : [batch_size * default_bar_num, num_classes]
+                # loss_conf : [batch_size * default_bar_num, 1]
+                batch_conf = conf_pred.view(-1, self.num_classes)
+                conf_t = torch.clamp(conf_t - 1, min=0)
+                loss_conf = log_sum_exp(batch_conf) - batch_conf.gather(1, conf_t.view(-1, 1))
 
-            # Hard Negative Mining
-            loss_conf = loss_conf.view(batch_size, -1)  # [batch_size, default_bar_num]
-            loss_conf[pos] = 0   # filter out pos boxes for now / positive에 해당하는 bar들을 filtering
-            _, loss_idx = loss_conf.sort(1, descending=True)    # loss_conf가 큰 idx의 내림차순 : [8, 26]
-            _, idx_rank = loss_idx.sort(1)  # 각 idx의 등수 : [batch_size, default_bar_num]
-            num_pos = pos.long().sum(1, keepdim=True)
-            num_neg = torch.clamp(self.negpos_ratio * num_pos, max=pos.size(1) - 1)     # [batch_size, 1]
-            neg = idx_rank < num_neg.expand_as(idx_rank)         # [batch_size, default_bar_num]
+                # Hard Negative Mining
+                loss_conf = loss_conf.view(batch_size, -1)  # [batch_size, default_bar_num]
+                loss_conf[pos] = 0   # filter out pos boxes for now / positive에 해당하는 bar들을 filtering
+                _, loss_idx = loss_conf.sort(1, descending=True)    # loss_conf가 큰 idx의 내림차순 : [8, 26]
+                _, idx_rank = loss_idx.sort(1)  # 각 idx의 등수 : [batch_size, default_bar_num]
+                num_pos = pos.long().sum(1, keepdim=True)
+                num_neg = torch.clamp(self.negpos_ratio * num_pos, max=pos.size(1) - 1)     # [batch_size, 1]
+                neg = idx_rank < num_neg.expand_as(idx_rank)         # [batch_size, default_bar_num]
 
-            # Confidence Loss Including Positive and Negative Examples
-            pos_idx = pos.unsqueeze(2).expand_as(conf_pred)
-            neg_idx = neg.unsqueeze(2).expand_as(conf_pred)
-            conf_p = conf_pred[(pos_idx + neg_idx).gt(0)].view(-1, self.num_classes)
-            targets_weighted = conf_t[(pos + neg).gt(0)]
-            loss_conf = self.conf_loss(conf_p, targets_weighted)
+                # Confidence Loss Including Positive and Negative Examples
+                pos_idx = pos.unsqueeze(2).expand_as(conf_pred)
+                neg_idx = neg.unsqueeze(2).expand_as(conf_pred)
+                conf_p = conf_pred[(pos_idx + neg_idx).gt(0)].view(-1, self.num_classes)
+                targets_weighted = conf_t[(pos + neg).gt(0)]
+                loss_conf = self.conf_loss(conf_p, targets_weighted)
 
-            # Sum of losses: L(x,c,l,g) = (Lconf(x, c) + αLloc(x,l,g)) / N
+                # Sum of losses: L(x,c,l,g) = (Lconf(x, c) + αLloc(x,l,g)) / N
 
-            N = num_pos.data.sum()
-            loss_loc /= N
-            loss_conf /= N
+                N = num_pos.data.sum()
+                loss_loc /= N
+                loss_conf /= N
 
-            # N_pos = num_pos.data.sum()
-            # N_neg = num_neg.data.sum()
-            # loss_loc /= N_pos
-            # loss_conf /= N_pos + N_neg
+                # N_pos = num_pos.data.sum()
+                # N_neg = num_neg.data.sum()
+                # loss_loc /= N_pos
+                # loss_conf /= N_pos + N_neg
+            else:
+                pass
 
         alpha = 0.5
         loss = loss_loc * alpha + loss_conf * (1. - alpha)
