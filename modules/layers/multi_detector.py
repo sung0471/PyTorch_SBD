@@ -1,17 +1,18 @@
 import torch
 import torch.nn as nn
-from lib.utils import channel_list, decoding, detection
+from lib.utils import get_channel_list, decoding, detection
 
 
 class MultiDetector(nn.Module):
     def __init__(self, block, in_planes, kernel_size=(16, 2, 2), num_classes=3, extra_layers=False,
-                 phase='train', conf_thresh=0.01, nms_thresh=0.45, top_k=5):
+                 phase='train', data_type='normal', conf_thresh=0.01, nms_thresh=0.33, top_k=5):
         super(MultiDetector, self).__init__()
 
         self.num_classes = num_classes
         self.extra_layers = extra_layers
         assert phase in ['train', 'test'], 'phase in ["train", "test"]'
         self.phase = phase
+        self.data_type = data_type
         self.conf_thresh = conf_thresh
         self.nms_thresh = nms_thresh
         self.top_k = top_k
@@ -28,24 +29,28 @@ class MultiDetector(nn.Module):
             self.loc_layer = list()
             self.conf_layer = list()
 
-            self.channel_list = channel_list(sample_duration=self.sample_duration)
+            channel_list = get_channel_list(sample_duration=self.sample_duration)
             kernel_size = (2, kernel_size[1], kernel_size[2])
             # kernel_size = (1, kernel_size[1], kernel_size[2])
             filter_size = (2, 1, 1)
 
-            self.loc_layer += [nn.Conv3d(in_channel, 2, kernel_size=kernel_size, padding=0, bias=False)]
-            self.conf_layer += [nn.Conv3d(in_channel, num_classes, kernel_size=kernel_size, padding=0, bias=False)]
-            for in_channel, mid_channel, out_channel in self.channel_list:
-                self.extra_layer += [nn.Conv3d(in_channel, mid_channel, kernel_size=1, padding=0, bias=False)]
-                self.extra_layer += [nn.Conv3d(mid_channel, out_channel, kernel_size=3, padding=filter_size, bias=False,
-                                               dilation=filter_size, stride=filter_size)]
-                self.loc_layer += [nn.Conv3d(out_channel, 2, kernel_size=kernel_size, padding=0, bias=False)]
-                self.conf_layer += [nn.Conv3d(out_channel, num_classes, kernel_size=kernel_size, padding=0, bias=False)]
+            if self.data_type in ['normal', 'cut']:
+                self.loc_layer += [nn.Conv3d(in_channel, 2, kernel_size=kernel_size, padding=0, bias=False)]
+                self.conf_layer += [nn.Conv3d(in_channel, num_classes, kernel_size=kernel_size, padding=0, bias=False)]
 
-            self.extra_layer = nn.Sequential(*self.extra_layer)
+            if self.data_type in ['normal', 'gradual']:
+                for in_channel, mid_channel, out_channel in channel_list:
+                    self.extra_layer += [nn.Conv3d(in_channel, mid_channel, kernel_size=1, padding=0, bias=False)]
+                    self.extra_layer += [nn.Conv3d(mid_channel, out_channel, kernel_size=3, padding=filter_size, bias=False,
+                                                   dilation=filter_size, stride=filter_size)]
+                    self.loc_layer += [nn.Conv3d(out_channel, 2, kernel_size=kernel_size, padding=0, bias=False)]
+                    self.conf_layer += [nn.Conv3d(out_channel, num_classes, kernel_size=kernel_size, padding=0, bias=False)]
+
             self.loc_layer = nn.Sequential(*self.loc_layer)
             self.conf_layer = nn.Sequential(*self.conf_layer)
-            self.relu = nn.ReLU(inplace=True)
+            if self.data_type in ['normal', 'gradual']:
+                self.extra_layer = nn.Sequential(*self.extra_layer)
+                self.relu = nn.ReLU(inplace=True)
 
             if self.phase == 'test':
                 self.softmax = nn.Softmax(dim=-1)
@@ -100,10 +105,12 @@ class MultiDetector(nn.Module):
             out = (loc_x.view(batch_size, -1, 2), conf_x.view(batch_size, -1, self.num_classes))
 
             # detection
-            # loc[8, 26, 2], conf[8, 26, 3]
+            # normal : loc[8, 26, 2], conf[8, 26, num_classes]
+            # cut : loc[8, 15, 2], conf[8, 15, num_classes]
+            # gradual : loc[8, 11, 2], conf[8, 11, num_classes]
             if self.phase == 'test':
                 out = (out[1], self.softmax(out[1]))
-                output = detection(out, self.sample_duration, self.num_classes,
+                output = detection(out, self.sample_duration, self.num_classes, self.data_type,
                                    self.top_k, self.conf_thresh, self.nms_thresh)
 
                 # output = [batch_size, num_classes, num_bars, [start, end, conf]]
