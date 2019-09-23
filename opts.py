@@ -22,6 +22,10 @@ def parse_opts():
     parser.add_argument('--resume_path', default='', type=str, help='Save data (.pth) of previous training')
     parser.add_argument('--input_type', default='RGB', help='RGB | HSV')
     parser.add_argument('--is_full_data', default=True, help='explain whether full data or not')
+    parser.add_argument('--train_data_type', default='cut', type=str, help='normal(cut, gradual) | cut | gradual')
+    parser.add_argument('--n_classes', default=2, type=int, help='Number of classes, automatic set by train_data_type'
+                                                                 'if train_data_type=="normal", 3'
+                                                                 'else, 2')
     parser.add_argument('--start_iter', default=0, type=int,
                         help='when training start with different batch size, adjust this value, else 0')
     parser.add_argument('--iter_per_epoch', default=0, type=int,
@@ -49,7 +53,6 @@ def parse_opts():
     parser.add_argument('--candidate', default=False, help='if true, use candidate extraction')
     parser.add_argument('--sample_size', default=64, type=int, help='Height and width of inputs')
     parser.add_argument('--sample_duration', default=16, type=int, help='Temporal duration of inputs')
-    parser.add_argument('--n_classes', default=3, type=int, help='Number of classes')
     parser.add_argument('--batch_size', default=8, type=int, help='Batch Size')
     parser.add_argument('--n_threads', default=2, type=int, help='Number of threads for multi-thread loading')
     parser.add_argument('--use_save_timing', default=False,
