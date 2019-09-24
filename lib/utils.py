@@ -136,10 +136,13 @@ def calculate_accuracy(outputs, targets, sample_duration, data_type, device):
                 )
                 # label=1,2만 loc 정확도 체크할 때
                 no_background_idx = conf_pred[:bars_num_per_batch] > 0
-                no_background_valid_bars_num = no_background_idx.sum().data
+                no_background_valid_bars_num = no_background_idx.float().sum().data
                 no_background_iou = iou[no_background_idx]
                 # iou_sum[batch_num, :] = no_background_iou.sum().clone().detach().data
-                iou_sum[batch_num, :] = no_background_iou.sum().clone().detach().data / no_background_valid_bars_num
+                if no_background_valid_bars_num == 0:
+                    iou_sum[batch_num, :] = 0
+                else:
+                    iou_sum[batch_num, :] = no_background_iou.float().sum().clone().detach().data / no_background_valid_bars_num
                 # label=0,1,2 모두 loc 정확도 체크할 때
                 # iou_sum[batch_num, :] = iou.float().sum().clone().detach().data
 
@@ -147,14 +150,17 @@ def calculate_accuracy(outputs, targets, sample_duration, data_type, device):
                 correct_idx = conf_pred[:bars_num_per_batch] == conf_target[batch_num]
                 if conf_target[batch_num] != 0:
                     iou_select = iou[correct_idx] > 0
-                    num_label_sum[batch_num, :] = iou_select.sum().clone().detach().data / no_background_valid_bars_num
+                    if no_background_valid_bars_num == 0:
+                        num_label_sum[batch_num, :] = 0
+                    else:
+                        num_label_sum[batch_num, :] = iou_select.sum().clone().detach().data / no_background_valid_bars_num
                 else:
-                    num_label_sum[batch_num, :] = correct_idx.sum().clone().detach().data / bars_num_per_batch
+                    num_label_sum[batch_num, :] = correct_idx.sum().clone().detach().data / float(bars_num_per_batch)
                 # num_label_sum[batch_num, :] = iou_select.sum().clone().detach().data
             # iou_avg = iou_sum.float().sum().clone().detach().data / no_background_valid_bars_num
             # n_correct_avg = num_label_sum.float().sum().clone().detach().data / all_valid_bars_num
-            iou_avg = iou_sum.float().sum().clone().detach().data / batch_size
-            n_correct_avg = num_label_sum.float().sum().clone().detach().data / batch_size
+            iou_avg = iou_sum.sum().clone().detach().data / batch_size
+            n_correct_avg = num_label_sum.sum().clone().detach().data / batch_size
             # iou_avg, n_correct_avg == NaN, 0 할당
             if iou_avg != iou_avg:
                 iou_avg = 0.0
