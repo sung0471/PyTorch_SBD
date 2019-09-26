@@ -23,11 +23,11 @@ from model_cls import build_model
 
 import cv2
 import pickle
-
+from tensorboardX import SummaryWriter
 import eval_res
 
 
-# writer = SummaryWriter()
+writer = SummaryWriter('runs/')
 
 
 def get_mean(norm_value=255):
@@ -116,6 +116,7 @@ def get_result(frame_pos, labels, opt):
 
     cut_priority = False
     gradual_priority = False
+    train_type = opt.train_data_type
     final_res = list()
     if not do_origin:
         for i, label in enumerate(labels):
@@ -175,7 +176,7 @@ def get_result(frame_pos, labels, opt):
                             last_start = final_res[-1][0]
                             last_end = final_res[-1][1]
                             last_label = final_res[-1][2]
-                            if label == 2:
+                            if label == 2 or (label == 1 and train_type == 'cut'):
                                 # 안 겹칠 때
                                 if last_end < start or end < last_start:
                                     if last_end < start:
@@ -648,7 +649,9 @@ def train(cur_iter, iter_per_epoch, epoch, data_loader, model, criterion, optimi
             # if opt.loss_type in ['normal', 'KDloss']:
             #     targets = targets[:, -1].to(torch.long)
 
-            loss = criterion(outputs, targets)
+            loss_loc, loss_conf = criterion(outputs, targets)
+            alpha = 0.5
+            loss = loss_loc * alpha + loss_conf * (1. - alpha)
 
             if opt.loss_type in ['KDloss']:
                 outputs = outputs[1]
@@ -667,11 +670,23 @@ def train(cur_iter, iter_per_epoch, epoch, data_loader, model, criterion, optimi
 
             if i % 10 == 0:
                 batch_time = time.time() - start_time
+                lr = optimizer.param_groups[0]['lr']
                 print('Iter:{} Loss(per 10 batch):{} lr:{} batch_time:{:.3f}s'.format(
-                    i, loss.item(), optimizer.param_groups[0]['lr'], batch_time), flush=True)
+                    i, loss.item(), lr, batch_time), flush=True)
+
+                writer.add_scalar('loss/loss_loc', loss_loc.item(), i)
+                writer.add_scalar('loss/loss_conf', loss_conf.item(), i)
+                writer.add_scalar('loss/loss', loss.item(), i)
+                writer.add_scalar('learning_rate', lr, i)
+                writer.add_scalar('acc_loss/loss_loc', loss_loc.item(), i)
+                writer.add_scalar('acc_loss/loss_conf', loss_conf.item(), i)
+                writer.add_scalar('acc_loss/loss', loss.item(), i)
+
                 for key in keys:
                     print('avg_acc:{:.5f}({}) epoch_acc:{:.9f}({})'.format(
                         avg_acc[key], key, epoch_acc[key], key), end=' ', flush=True)
+                    writer.add_scalar('accuracy/acc_{}'.format(key), avg_acc[key], i)
+                    writer.add_scalar('acc_loss/acc_{}'.format(key), avg_acc[key], i)
                     avg_acc[key] = 0.0
                 print(flush=True)
                 start_time = time.time()
@@ -776,14 +791,19 @@ def train_dataset(opt, device, model):
 
     parameters = model.parameters()
 
-    if opt.nesterov:
-        dampening = 0
-    else:
-        dampening = opt.momentum
+    if opt.optimizer == 'sgd':
+        if opt.nesterov:
+            dampening = 0
+        else:
+            dampening = opt.momentum
 
-    optimizer = optim.SGD(parameters, lr=opt.learning_rate,
-                          momentum=opt.momentum, dampening=dampening,
-                          weight_decay=opt.weight_decay, nesterov=opt.nesterov)
+        optimizer = optim.SGD(parameters, lr=opt.learning_rate,
+                              momentum=opt.momentum, dampening=dampening,
+                              weight_decay=opt.weight_decay, nesterov=opt.nesterov)
+    elif opt.optimizer == 'adam':
+        optimizer = optim.Adam(parameters, lr=opt.learning_rate,
+                               betas=(0.9, 0.999), eps=1e-8,
+                               weight_decay=opt.weight_decay)
 
     cur_iter = 0
     if opt.auto_resume and opt.resume_path == '':
@@ -807,7 +827,7 @@ def train_dataset(opt, device, model):
     elif opt.loss_type == 'multiloss':
         criterion = MultiLoss(device=device, extra_layers=opt.use_extra_layer,
                               sample_duration=opt.sample_duration, num_classes=opt.n_classes,
-                              data_type=opt.train_data_type, neg_ratio=3)
+                              data_type=opt.train_data_type, neg_ratio=3, neg_threshold=opt.neg_threshold)
     else:
         criterion = nn.CrossEntropyLoss()
 
@@ -902,34 +922,6 @@ def main():
     # 19.3.8. add
     print("cuda is available : ", torch.cuda.is_available(), flush=True)
 
-    # 19.5.16 add
-    # set default tensor type
-    # 19.6.26.
-    # model generate 시 적용되게 수정
-    # 19.7.1.
-    # model 완성전에 benchmark 수행하게 설정
-    # 19.7.10. 주석처리
-    # if torch.cuda.is_available() and opt.cuda:
-    #     torch.backends.benchmark = True
-    
-    # ubuntu에서 주석처리해서 > 에러해결
-    #     torch.set_default_tensor_type('torch.cuda.FloatTensor')
-    # else:
-    #     torch.set_default_tensor_type('torch.FloatTensor')
-
-    # assert opt.phase in ['train', 'test']
-    # # 19.5.7. add
-    # # teacher student option add
-    # if opt.loss_type == 'KDloss':
-    #     teacher_model_path = 'models/Alexnet-final.pth'
-    #     model = teacher_student_net(opt, teacher_model_path, device)
-    # else:
-    #     model = build_model(opt, opt.phase, device)
-    # print(model)
-
-    # 위의 라인을 하나의 함수로 통합
-    model = build_final_model(opt, device)
-
     # `19.7.7. add
     # parallel>benchmark>cuda 순서 적용한 부분 추가
     # `19.7.10. 주석처리
@@ -961,20 +953,57 @@ def main():
         opt.n_classes = 3
     else:
         opt.n_classes = 2
+        if opt.train_data_type == 'cut':
+            opt.neg_threshold = opt.neg_threshold[0]
+        else:
+            opt.neg_threshold = opt.neg_threshold[1]
+
+    # 19.5.16 add
+    # set default tensor type
+    # 19.6.26.
+    # model generate 시 적용되게 수정
+    # 19.7.1.
+    # model 완성전에 benchmark 수행하게 설정
+    # 19.7.10. 주석처리
+    # if torch.cuda.is_available() and opt.cuda:
+    #     torch.backends.benchmark = True
+
+    # ubuntu에서 주석처리해서 > 에러해결
+    #     torch.set_default_tensor_type('torch.cuda.FloatTensor')
+    # else:
+    #     torch.set_default_tensor_type('torch.FloatTensor')
+
+    # assert opt.phase in ['train', 'test']
+    # # 19.5.7. add
+    # # teacher student option add
+    # if opt.loss_type == 'KDloss':
+    #     teacher_model_path = 'models/Alexnet-final.pth'
+    #     model = teacher_student_net(opt, teacher_model_path, device)
+    # else:
+    #     model = build_model(opt, opt.phase, device)
+    # print(model)
 
     assert opt.input_type in ['RGB', 'HSV']
-    if opt.phase == 'train':
-        train_dataset(opt, device, model)
+    out_path = os.path.join(opt.result_dir, 'results.json')
+    out_log_path = os.path.join(opt.result_dir, 'tp_tn_fp_fn.json')
+    if opt.phase == 'full':
+        phase_list = ['train', 'test']
     else:
-        if opt.misaeng:
-            test_misaeng(opt, device, model)
+        phase_list = [opt.phase]
+
+    for phase in phase_list:
+        opt.phase = phase
+        model = build_final_model(opt, device)
+        if phase == 'train':
+            train_dataset(opt, device, model)
         else:
-            out_path = os.path.join(opt.result_dir, 'results.json')
-            out_log_path = os.path.join(opt.result_dir, 'tp_tn_fp_fn.json')
-            if not os.path.exists(out_path):
-                res = test_dataset(opt, device, model)
-                json.dump(res, open(out_path, 'w'))
-            eval_res.eval(out_path, out_log_path, opt.gt_dir, opt.train_data_type)
+            if opt.misaeng:
+                test_misaeng(opt, device, model)
+            else:
+                if not os.path.exists(out_path):
+                    res = test_dataset(opt, device, model)
+                    json.dump(res, open(out_path, 'w'))
+                eval_res.eval(out_path, out_log_path, opt.gt_dir, opt.train_data_type)
 
 
 if __name__ == '__main__':
