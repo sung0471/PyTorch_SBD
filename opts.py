@@ -3,7 +3,7 @@ import argparse
 
 def parse_opts():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--phase', default='train', type=str, help='train | test')
+    parser.add_argument('--phase', default='full', type=str, help='train | test | full')
     parser.add_argument('--misaeng', default=False, help='if true, test misaeng')
     parser.add_argument('--gpu_num', type=int, default=1)
     parser.add_argument('--cuda', action='store_true', help='If true, cuda is used.')
@@ -59,13 +59,16 @@ def parse_opts():
                         help='if True, adjust save timing from 2000 to 5000. else, iter_per_epoch / 5')
     parser.add_argument('--shuffle', default=True, help="shuffle the dataset")
     parser.add_argument('--checkpoint_path')
-    parser.add_argument('--learning_rate', default=1e-3, type=float,
+    parser.add_argument('--learning_rate', default=2e-5, type=float,
                         help='Initial learning rate (divided by 10 while training by lr scheduler)')
     parser.add_argument('--momentum', default=0.9, type=float, help='Momentum')
     parser.add_argument('--weight_decay', default=1e-3, type=float, help='Weight Decay')
     parser.add_argument('--nesterov', action='store_true', help='Nesterov momentum')
     parser.set_defaults(nesterov=False)
-    parser.add_argument('--optimizer', default='sgd', type=str, help='Currently only support SGD')
+    parser.add_argument('--betas', default=(0.9, 0.999), help="Adam's betas")
+    parser.add_argument('--eps', default=1e-8, type=float, help="Adam's eps")
+    parser.add_argument('--optimizer', default='adam', type=str, help='sgd | adam')
+    parser.add_argument('--neg_threshold', default=(0.33, 0.5), help='negative threshold for cut, gradual')
     parser.add_argument('--lr_patience', default=10, type=int,
                         help='Patience of LR scheduler. See documentation of ReduceLROnPlateau.')
     parser.add_argument('--norm_value', default=1, type=int,
