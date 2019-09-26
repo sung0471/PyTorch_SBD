@@ -150,7 +150,7 @@ class MultiDetector(nn.Module):
 
                 # frame_pos = [bars_num, 2]
                 # labels = [bars_num, 1]
-                out = (frame_pos[:num] + 1, labels[:num])
+                out = (frame_pos[:num], labels[:num])
 
         return out
 
