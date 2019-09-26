@@ -137,6 +137,10 @@ class ResNet(nn.Module):
             self.Detector_layer = MultiDetector
 
         super(ResNet, self).__init__()
+        self.sample_size = sample_size
+        if self.sample_size == 128:
+            self.avgpool_128 = nn.MaxPool3d(kernel_size=(3, 3, 3), stride=(1, 2, 2), padding=1)
+            sample_size = 64
         self.conv1 = nn.Conv3d(3, 64, kernel_size=7, stride=(1, 2, 2),
                                padding=(3, 3, 3), bias=False)
         self.bn1 = nn.BatchNorm3d(64)
@@ -195,6 +199,8 @@ class ResNet(nn.Module):
         # x = x.cuda()
         # x = x.to(device)
 
+        if self.sample_size == 128:
+            x = self.avgpool_128(x)
         x = self.conv1(x)
         x = self.bn1(x)
         x = self.relu(x)
@@ -294,6 +300,10 @@ class ResNeXt(nn.Module):
             self.Detector_layer = MultiDetector
 
         super(ResNeXt, self).__init__()
+        self.sample_size = sample_size
+        if self.sample_size == 128:
+            self.avgpool_128 = nn.AvgPool3d(kernel_size=(3, 3, 3), stride=(1, 2, 2), padding=1)
+            sample_size = 64
         self.conv1 = nn.Conv3d(3, 64, kernel_size=7, stride=(1, 2, 2), padding=(3, 3, 3), bias=False)
         self.bn1 = nn.BatchNorm3d(64)
         self.relu = nn.ReLU(inplace=True)
@@ -349,6 +359,8 @@ class ResNeXt(nn.Module):
     def forward(self, x, boundaries=None):
         # x = x.to(device)
         # x = x.cuda()
+        if self.sample_size == 128:
+            x = self.avgpool_128(x)
         x = self.conv1(x)
         x = self.bn1(x)
         x = self.relu(x)
