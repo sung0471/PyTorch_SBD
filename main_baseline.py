@@ -15,7 +15,7 @@ from data.test_data_loader import DataSet as test_DataSet
 import time
 import datetime
 
-from lib.utils import AverageMeter, calculate_accuracy
+from lib.utils import AverageMeter, calculate_accuracy, Configure
 from modules.teacher_student_module import TeacherStudentModule
 from modules.knowledge_distillation_loss import KDloss
 from modules.multiloss import MultiLoss
@@ -25,9 +25,6 @@ import cv2
 import pickle
 from tensorboardX import SummaryWriter
 import eval_res
-
-
-writer = SummaryWriter('runs/')
 
 
 def get_mean(norm_value=255):
@@ -619,6 +616,9 @@ def train(cur_iter, iter_per_epoch, epoch, data_loader, model, criterion, optimi
             save_timing = 5000
     epoch_time = time.time()
 
+    writer = SummaryWriter('runs/')
+    c = Configure(sample_duration=opt.sample_duration, data_type=opt.train_data_type, policy=opt.layer_policy)
+    default = c.default_bar()
     print('\n====> Training Start', flush=True)
     while i < total_iter:
         start_time = time.time()
@@ -656,7 +656,7 @@ def train(cur_iter, iter_per_epoch, epoch, data_loader, model, criterion, optimi
             if opt.loss_type in ['KDloss']:
                 outputs = outputs[1]
 
-            acc = calculate_accuracy(outputs, targets, opt.sample_duration, opt.train_data_type, device)
+            acc = calculate_accuracy(outputs, targets, opt.sample_duration, default, device)
             for key in keys:
                 avg_acc[key] += acc[key] / 10
                 epoch_acc[key] += acc[key] / iter_per_epoch
@@ -723,6 +723,7 @@ def train(cur_iter, iter_per_epoch, epoch, data_loader, model, criterion, optimi
     torch.save(states, save_file_path)
 
     json.dump(total_acc, open(os.path.join(opt.result_dir, 'epoch_accuracy_and_total_time.json'), 'w'))
+    writer.close()
 
 
 def get_lastest_model(opt):
@@ -827,7 +828,7 @@ def train_dataset(opt, device, model):
     elif opt.loss_type == 'multiloss':
         criterion = MultiLoss(device=device, extra_layers=opt.use_extra_layer,
                               sample_duration=opt.sample_duration, num_classes=opt.n_classes,
-                              data_type=opt.train_data_type, neg_ratio=3, neg_threshold=opt.neg_threshold)
+                              data_type=opt.train_data_type, policy=opt.layer_policy, neg_ratio=3, neg_threshold=opt.neg_threshold)
     else:
         criterion = nn.CrossEntropyLoss()
 
