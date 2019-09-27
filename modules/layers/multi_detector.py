@@ -1,21 +1,27 @@
 import torch
 import torch.nn as nn
-from lib.utils import channel_list, decoding, detection
+from lib.utils import Configure, decoding, detection
 
 
 class MultiDetector(nn.Module):
     def __init__(self, block, in_planes, kernel_size=(16, 2, 2), num_classes=3, extra_layers=False,
-                 phase='train', conf_thresh=0.01, nms_thresh=0.45, top_k=5):
+                 phase='train', data_type='normal', policy='first', conf_thresh=0.01, nms_thresh=0.33, top_k=5):
         super(MultiDetector, self).__init__()
 
         self.num_classes = num_classes
         self.extra_layers = extra_layers
         assert phase in ['train', 'test'], 'phase in ["train", "test"]'
         self.phase = phase
+        self.data_type = data_type
         self.conf_thresh = conf_thresh
         self.nms_thresh = nms_thresh
         self.top_k = top_k
         self.sample_duration = kernel_size[0]
+        self.policy = policy
+        assert self.policy in ['first', 'second']
+        c = Configure(sample_duration=self.sample_duration, policy=self.policy)
+        channel_list = c.get_channel_list()
+        self.default_bar = c.default_bar()
 
         in_channel = in_planes * block.expansion
         if not self.extra_layers:
@@ -27,25 +33,57 @@ class MultiDetector(nn.Module):
             self.extra_layer = list()
             self.loc_layer = list()
             self.conf_layer = list()
+            self.short_cut = None
 
-            self.channel_list = channel_list(sample_duration=self.sample_duration)
-            kernel_size = (2, kernel_size[1], kernel_size[2])
-            # kernel_size = (1, kernel_size[1], kernel_size[2])
-            filter_size = (2, 1, 1)
+            if self.policy == 'first':
+                kernel_size = (2, kernel_size[1], kernel_size[2])
+                # kernel_size = (1, kernel_size[1], kernel_size[2])
+                filter_size = (2, 1, 1)
+                if self.data_type in ['normal', 'cut']:
+                    self.loc_layer += [nn.Conv3d(in_channel, 2, kernel_size=kernel_size, padding=0, bias=False)]
+                    self.conf_layer += [nn.Conv3d(in_channel, num_classes, kernel_size=kernel_size, padding=0, bias=False)]
 
-            self.loc_layer += [nn.Conv3d(in_channel, 2, kernel_size=kernel_size, padding=0, bias=False)]
-            self.conf_layer += [nn.Conv3d(in_channel, num_classes, kernel_size=kernel_size, padding=0, bias=False)]
-            for in_channel, mid_channel, out_channel in self.channel_list:
-                self.extra_layer += [nn.Conv3d(in_channel, mid_channel, kernel_size=1, padding=0, bias=False)]
-                self.extra_layer += [nn.Conv3d(mid_channel, out_channel, kernel_size=3, padding=filter_size, bias=False,
-                                               dilation=filter_size, stride=filter_size)]
-                self.loc_layer += [nn.Conv3d(out_channel, 2, kernel_size=kernel_size, padding=0, bias=False)]
-                self.conf_layer += [nn.Conv3d(out_channel, num_classes, kernel_size=kernel_size, padding=0, bias=False)]
+                if self.data_type in ['normal', 'gradual']:
+                    for in_channel, mid_channel, out_channel in channel_list:
+                        self.extra_layer += [nn.Conv3d(in_channel, mid_channel, kernel_size=1, padding=0, bias=False)]
+                        self.extra_layer += [nn.Conv3d(mid_channel, out_channel, kernel_size=3, padding=filter_size, bias=False,
+                                                       dilation=filter_size, stride=filter_size)]
+                        self.loc_layer += [nn.Conv3d(out_channel, 2, kernel_size=kernel_size, padding=0, bias=False)]
+                        self.conf_layer += [nn.Conv3d(out_channel, num_classes, kernel_size=kernel_size, padding=0, bias=False)]
 
-            self.extra_layer = nn.Sequential(*self.extra_layer)
-            self.loc_layer = nn.Sequential(*self.loc_layer)
-            self.conf_layer = nn.Sequential(*self.conf_layer)
-            self.relu = nn.ReLU(inplace=True)
+                self.loc_layer = nn.Sequential(*self.loc_layer)
+                self.conf_layer = nn.Sequential(*self.conf_layer)
+                if self.data_type in ['normal', 'gradual']:
+                    self.extra_layer = nn.Sequential(*self.extra_layer)
+                    self.relu = nn.ReLU(inplace=True)
+
+            else:
+                pooling_size = (1, kernel_size[1], kernel_size[2])
+                filter_size = [(3, 1, 1), (4, 1, 1), (3, 1, 1)]
+                stride_size = [1, (2, 1, 1), (2, 1, 1)]
+                # self.short_cut = list()
+                self.avg_pool = nn.AvgPool3d(kernel_size=pooling_size, stride=1)
+                for idx, (in_channel, mid_channel, out_channel) in enumerate(channel_list):
+                    self.extra_layer += [nn.Conv3d(in_channel, mid_channel, kernel_size=1, padding=0, bias=False)]
+                    self.extra_layer += [nn.Conv3d(mid_channel, out_channel, kernel_size=filter_size[i],
+                                                   padding=0, bias=False, stride=stride_size[i])]
+                    if idx == 0:
+                        if self.data_type in ['normal', 'cut']:
+                            self.loc_layer += [nn.Conv3d(out_channel, 2, kernel_size=3, padding=1, bias=False)]
+                            self.conf_layer += [nn.Conv3d(out_channel, num_classes, kernel_size=3, padding=1, bias=False)]
+                    else:
+                        # self.short_cut += [nn.Conv3d(in_channel, out_channel,
+                        #                              kernel_size=1, padding=0, bias=False, stride=(2, 1, 1))]
+                        if self.data_type in ['normal', 'gradual']:
+                            self.loc_layer += [nn.Conv3d(out_channel, 2, kernel_size=3, padding=1, bias=False)]
+                            self.conf_layer += [nn.Conv3d(out_channel, num_classes, kernel_size=3, padding=1, bias=False)]
+                    if self.data_type in ['cut']:
+                        break
+
+                self.loc_layer = nn.Sequential(*self.loc_layer)
+                self.conf_layer = nn.Sequential(*self.conf_layer)
+                self.extra_layer = nn.Sequential(*self.extra_layer)
+                self.relu = nn.ReLU(inplace=True)
 
             if self.phase == 'test':
                 self.softmax = nn.Softmax(dim=-1)
@@ -81,16 +119,40 @@ class MultiDetector(nn.Module):
         else:
             loc_list = list()
             conf_list = list()
-            loc_list += [self.loc_layer[0](x).view(batch_size, -1)]
-            conf_list += [self.conf_layer[0](x).view(batch_size, -1)]
-            for i in range(0, len(self.extra_layer), 2):
-                x = self.extra_layer[i](x)
-                x = self.extra_layer[i + 1](x)
-                x = self.relu(x)
+            if self.policy == 'first':
+                loc_list += [self.loc_layer[0](x).view(batch_size, -1)]
+                conf_list += [self.conf_layer[0](x).view(batch_size, -1)]
+                for i in range(0, len(self.extra_layer), 2):
+                    x = self.extra_layer[i](x)
+                    x = self.extra_layer[i + 1](x)
+                    x = self.relu(x)
 
-                idx = int(i / 2 + 1)
-                loc_list += [self.loc_layer[idx](x).view(batch_size, -1)]
-                conf_list += [self.conf_layer[idx](x).view(batch_size, -1)]
+                    if self.data_type in ['normal']:
+                        idx = int(i / 2 + 1)
+                    else:
+                        idx = int(i / 2)
+                    loc_list += [self.loc_layer[idx](x).view(batch_size, -1)]
+                    conf_list += [self.conf_layer[idx](x).view(batch_size, -1)]
+
+            else:
+                x = self.avg_pool(x)
+                for i in range(0, len(self.extra_layer), 2):
+                    out = self.extra_layer[i](x)
+                    out = self.relu(out)
+                    out = self.extra_layer[i + 1](out)
+                    if self.short_cut is not None and i > 0:
+                        short_cut = self.short_cut[i](x)
+                        out += short_cut
+                    x = self.relu(out)
+
+                    idx = int(i / 2)
+                    if self.data_type in ['gradual']:
+                        if i == 0:
+                            continue
+                        else:
+                            idx -= 1
+                    loc_list += [self.loc_layer[idx](x).view(batch_size, -1)]
+                    conf_list += [self.conf_layer[idx](x).view(batch_size, -1)]
 
             loc_x = loc_list[0]
             conf_x = conf_list[0]
@@ -100,10 +162,12 @@ class MultiDetector(nn.Module):
             out = (loc_x.view(batch_size, -1, 2), conf_x.view(batch_size, -1, self.num_classes))
 
             # detection
-            # loc[8, 26, 2], conf[8, 26, 3]
+            # normal : loc[8, 26, 2], conf[8, 26, num_classes]
+            # cut : loc[8, 15, 2], conf[8, 15, num_classes]
+            # gradual : loc[8, 11, 2], conf[8, 11, num_classes]
             if self.phase == 'test':
                 out = (out[1], self.softmax(out[1]))
-                output = detection(out, self.sample_duration, self.num_classes,
+                output = detection(out, self.sample_duration, self.num_classes, self.default_bar,
                                    self.top_k, self.conf_thresh, self.nms_thresh)
 
                 # output = [batch_size, num_classes, num_bars, [start, end, conf]]
@@ -143,7 +207,7 @@ class MultiDetector(nn.Module):
 
                 # frame_pos = [bars_num, 2]
                 # labels = [bars_num, 1]
-                out = (frame_pos[:num] + 1, labels[:num])
+                out = (frame_pos[:num], labels[:num])
 
         return out
 

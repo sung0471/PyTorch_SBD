@@ -129,14 +129,19 @@ class Bottleneck(nn.Module):
 
 
 class ResNet(nn.Module):
-    def __init__(self, block, layers, sample_size, sample_duration, shortcut_type='B',
-                 num_classes=400, use_depthwise=False, loss_type=None, use_extra_layer=False, phase='train'):
+    def __init__(self, block, layers, sample_size, sample_duration, shortcut_type='B', num_classes=400,
+                 use_depthwise=False, loss_type=None, use_extra_layer=False, phase='train',
+                 data_type='normal', policy='first'):
         self.inplanes = 64
         self.Detector_layer = None
         if loss_type == 'multiloss':
             self.Detector_layer = MultiDetector
 
         super(ResNet, self).__init__()
+        self.sample_size = sample_size
+        if self.sample_size == 128:
+            self.avgpool_128 = nn.MaxPool3d(kernel_size=(3, 3, 3), stride=(1, 2, 2), padding=1)
+            sample_size = 64
         self.conv1 = nn.Conv3d(3, 64, kernel_size=7, stride=(1, 2, 2),
                                padding=(3, 3, 3), bias=False)
         self.bn1 = nn.BatchNorm3d(64)
@@ -153,7 +158,7 @@ class ResNet(nn.Module):
         if self.Detector_layer is not None:
             self.Detector_layer = self.Detector_layer(block, 512, kernel_size=kernel_size,
                                                       num_classes=num_classes, extra_layers=use_extra_layer,
-                                                      phase=phase)
+                                                      phase=phase, data_type=data_type, policy=policy)
         else:
             self.avgpool = nn.AvgPool3d(kernel_size, stride=1)
             self.fc = nn.Linear(512 * block.expansion, num_classes)
@@ -195,6 +200,8 @@ class ResNet(nn.Module):
         # x = x.cuda()
         # x = x.to(device)
 
+        if self.sample_size == 128:
+            x = self.avgpool_128(x)
         x = self.conv1(x)
         x = self.bn1(x)
         x = self.relu(x)
@@ -283,8 +290,9 @@ class ResNeXtBottleneck(nn.Module):
 
 
 class ResNeXt(nn.Module):
-    def __init__(self, block, layers, sample_size, sample_duration, shortcut_type='B', cardinality=32,
-                 num_classes=400, use_depthwise=False, loss_type=None, use_extra_layer=False, phase='train'):
+    def __init__(self, block, layers, sample_size, sample_duration, shortcut_type='B', cardinality=32, num_classes=400,
+                 use_depthwise=False, loss_type=None, use_extra_layer=False, phase='train',
+                 data_type='normal', policy='first'):
         self.inplanes = 64
         self.DS_Conv3d = None
         if use_depthwise:
@@ -294,6 +302,10 @@ class ResNeXt(nn.Module):
             self.Detector_layer = MultiDetector
 
         super(ResNeXt, self).__init__()
+        self.sample_size = sample_size
+        if self.sample_size == 128:
+            self.avgpool_128 = nn.AvgPool3d(kernel_size=(3, 3, 3), stride=(1, 2, 2), padding=1)
+            sample_size = 64
         self.conv1 = nn.Conv3d(3, 64, kernel_size=7, stride=(1, 2, 2), padding=(3, 3, 3), bias=False)
         self.bn1 = nn.BatchNorm3d(64)
         self.relu = nn.ReLU(inplace=True)
@@ -309,7 +321,7 @@ class ResNeXt(nn.Module):
         if self.Detector_layer is not None:
             self.Detector_layer = self.Detector_layer(block, cardinality * 32, kernel_size=kernel_size,
                                                       num_classes=num_classes, extra_layers=use_extra_layer,
-                                                      phase=phase)
+                                                      phase=phase, data_type='normal', policy=policy)
         else:
             self.avgpool = nn.AvgPool3d(kernel_size, stride=1)
             self.fc = nn.Linear(cardinality * 32 * block.expansion, num_classes)
@@ -349,6 +361,8 @@ class ResNeXt(nn.Module):
     def forward(self, x, boundaries=None):
         # x = x.to(device)
         # x = x.cuda()
+        if self.sample_size == 128:
+            x = self.avgpool_128(x)
         x = self.conv1(x)
         x = self.bn1(x)
         x = self.relu(x)

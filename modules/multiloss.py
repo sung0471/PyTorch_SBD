@@ -1,11 +1,12 @@
 import torch
 import torch.nn as nn
 from modules.layers.multi_detector import MultiDetector
-from lib.utils import encoding, cal_iou, log_sum_exp, default_bar
+from lib.utils import encoding, cal_iou, log_sum_exp, Configure
 
 
 class MultiLoss(nn.Module):
-    def __init__(self, device, extra_layers=False, sample_duration=16, num_classes=3, neg_ratio=3):
+    def __init__(self, device, extra_layers=False, sample_duration=16, num_classes=3,
+                 data_type='normal', policy='first', neg_ratio=3, neg_threshold=(0.33, 0.5)):
         super(MultiLoss, self).__init__()
 
         self.device = device
@@ -13,11 +14,13 @@ class MultiLoss(nn.Module):
         self.sample_duration = sample_duration
         self.num_classes = num_classes
         self.negpos_ratio = neg_ratio
+        self.neg_threshold = neg_threshold
 
         self.reg_loss = nn.SmoothL1Loss()
         # self.reg_loss = nn.MSELoss()
         self.conf_loss = nn.CrossEntropyLoss()
-        self.default_bar = default_bar(sample_duration=sample_duration)
+        c = Configure(sample_duration=sample_duration, data_type=data_type, policy=policy)
+        self.default_bar = c.default_bar()
 
     def forward(self, predictions, targets):
         total_length = self.sample_duration
@@ -77,7 +80,11 @@ class MultiLoss(nn.Module):
                     best_truth_idx[best_prior_idx[j]] = j
                 matches = truths[best_truth_idx]    # Shape: [default_bar_num, 2]
                 conf = labels[best_truth_idx] + 1   # Shape: [default_bar_num]
-                conf[best_truth_overlap < 0.5] = 0  # label as negative
+
+                background_conf_idx = conf == 1         # get index of background
+                conf[best_truth_overlap < self.neg_threshold] = 0     # label as negative
+                conf[background_conf_idx] = 1           # set label to background
+
                 assert matches.size() == self.default_bar.size(),\
                     "matches_size : {}, default_bar_size : {}".format(matches.size(), default.size())
                 loc = encoding(matches, total_length, default_bar=default)
@@ -128,10 +135,7 @@ class MultiLoss(nn.Module):
             # loss_loc /= N_pos
             # loss_conf /= N_pos + N_neg
 
-        alpha = 0.5
-        loss = loss_loc * alpha + loss_conf * (1. - alpha)
-
-        return loss
+        return loss_loc, loss_conf
 
 
 if __name__ == '__main__':

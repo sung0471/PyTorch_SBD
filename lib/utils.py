@@ -50,7 +50,7 @@ def load_value_file(file_path):
     return value
 
 
-def calculate_accuracy(outputs, targets, sample_duration, device):
+def calculate_accuracy(outputs, targets, sample_duration, default, device):
     batch_size = targets.size(0)
     total_length = sample_duration
 
@@ -77,11 +77,11 @@ def calculate_accuracy(outputs, targets, sample_duration, device):
             # targets = [batch_size, 3]
             top_k = 5
             outputs = (outputs[0], nn.Softmax(dim=-1)(outputs[1]))
-            output = detection(outputs, sample_duration, num_classes=3,
-                               top_k=top_k, conf_thresh=0.01, nms_thresh=0.45)
+            num_classes = outputs[1].size(2)
+            output = detection(outputs, sample_duration, num_classes=num_classes, default_bar=default,
+                               top_k=top_k, conf_thresh=0.01, nms_thresh=0.33)
             # output = [batch_size, num_classes, num_bars, [start, end, conf]]
             # pred_num = [batch_size, num_classes]
-            num_classes = output.size(1)
 
             # output = [batch_size, num_classes, num_bars, [start, end, conf]]
             pred_num = torch.zeros(batch_size, num_classes, dtype=torch.int32)
@@ -106,8 +106,8 @@ def calculate_accuracy(outputs, targets, sample_duration, device):
 
             iou_sum = torch.zeros(batch_size, 1).to(device)
             num_label_sum = torch.zeros(batch_size, 1).to(device)
-            no_background_valid_bars_num = 0.0
-            all_valid_bars_num = 0.0
+            # no_background_valid_bars_num = 0.0
+            # all_valid_bars_num = 0.0
             for batch_num in range(batch_size):
                 bars_num_per_batch = 0
                 for cls in range(num_classes):
@@ -136,19 +136,31 @@ def calculate_accuracy(outputs, targets, sample_duration, device):
                 )
                 # label=1,2만 loc 정확도 체크할 때
                 no_background_idx = conf_pred[:bars_num_per_batch] > 0
-                no_background_valid_bars_num += no_background_idx.sum().data
+                no_background_valid_bars_num = no_background_idx.float().sum().data
                 no_background_iou = iou[no_background_idx]
-                iou_sum[batch_num, :] = no_background_iou.sum().clone().detach().data
+                # iou_sum[batch_num, :] = no_background_iou.sum().clone().detach().data
+                if no_background_valid_bars_num == 0:
+                    iou_sum[batch_num, :] = 0
+                else:
+                    iou_sum[batch_num, :] = no_background_iou.float().sum().clone().detach().data / no_background_valid_bars_num
                 # label=0,1,2 모두 loc 정확도 체크할 때
                 # iou_sum[batch_num, :] = iou.float().sum().clone().detach().data
 
                 # cal_correct_label per batch
-                all_valid_bars_num += bars_num_per_batch
                 correct_idx = conf_pred[:bars_num_per_batch] == conf_target[batch_num]
-                iou_select = iou[correct_idx] > 0
-                num_label_sum[batch_num, :] = iou_select.sum().clone().detach().data
-            iou_avg = iou_sum.float().sum().clone().detach().data / no_background_valid_bars_num
-            n_correct_avg = num_label_sum.float().sum().clone().detach().data / all_valid_bars_num
+                if conf_target[batch_num] != 0:
+                    iou_select = iou[correct_idx] > 0
+                    if no_background_valid_bars_num == 0:
+                        num_label_sum[batch_num, :] = 0
+                    else:
+                        num_label_sum[batch_num, :] = iou_select.sum().clone().detach().data / no_background_valid_bars_num
+                else:
+                    num_label_sum[batch_num, :] = correct_idx.sum().clone().detach().data / float(bars_num_per_batch)
+                # num_label_sum[batch_num, :] = iou_select.sum().clone().detach().data
+            # iou_avg = iou_sum.float().sum().clone().detach().data / no_background_valid_bars_num
+            # n_correct_avg = num_label_sum.float().sum().clone().detach().data / all_valid_bars_num
+            iou_avg = iou_sum.sum().clone().detach().data / batch_size
+            n_correct_avg = num_label_sum.sum().clone().detach().data / batch_size
             # iou_avg, n_correct_avg == NaN, 0 할당
             if iou_avg != iou_avg:
                 iou_avg = 0.0
@@ -275,38 +287,6 @@ def log_sum_exp(x):
     return torch.log(torch.sum(torch.exp(x - x_max), 1, keepdim=True)) + x_max
 
 
-def channel_list(sample_duration=16):
-    assert sample_duration in [16, 32]
-
-    channel_l = dict()
-    channel_l[16] = [(2048, 512, 1024), (1024, 256, 512), (512, 128, 256)]
-    channel_l[32] = [(2048, 512, 1024), (1024, 256, 512), (512, 128, 256), (256, 128, 256)]
-
-    return channel_l[sample_duration]
-
-
-def default_bar(sample_duration=16):
-    assert sample_duration in [16, 32]
-    default_bar_number_list = dict()
-    default_bar_number_list[16] = [15, 7, 3, 1]
-    default_bar_number_list[32] = [31, 15, 7, 3, 1]
-    default_bar_list = dict()
-    default_bar_list[16] = torch.zeros(26, 2)
-    default_bar_list[32] = torch.zeros(57, 2)
-
-    for key in default_bar_number_list.keys():
-        count = 0
-        length = 2
-        for default_bar_number in default_bar_number_list[key]:
-            for start in range(default_bar_number):
-                default_bar_list[key][count][0] = start * (length / 2)
-                default_bar_list[key][count][1] = start * (length / 2) + length - 1
-                count += 1
-            length *= 2
-
-    return default_bar_list[sample_duration]
-
-
 # Original author: Francisco Massa:
 # https://github.com/fmassa/object-detection.torch
 # Ported to PyTorch by Max deGroot (02/01/2017)
@@ -349,8 +329,8 @@ def nms(bars, scores, overlap=0.5, top_k=200):
         ss = torch.index_select(start, 0, idx)   # [--num]
         ee = torch.index_select(end, 0, idx)     # [--num]
         # store element-wise max with next highest score
-        ss = torch.clamp(ss, min=start[i].data)      # [--num]
-        ee = torch.clamp(ee, max=end[i].data)        # [--num]
+        ss = torch.clamp(ss, min=start[i].item())      # [--num]
+        ee = torch.clamp(ee, max=end[i].item())        # [--num]
         l = ee - ss + 1     # [--num]
         # check length.. after each iteration
         inter = torch.clamp(l, min=0.0)         # [--num]
@@ -363,12 +343,12 @@ def nms(bars, scores, overlap=0.5, top_k=200):
     return keep, count
 
 
-def detection(out, sample_duration, num_classes, top_k, conf_thresh, nms_thresh):
+def detection(out, sample_duration, num_classes, default_bar, top_k, conf_thresh, nms_thresh):
     loc, conf = out
     # frame_pos = torch.zeros(loc.size(0), loc.size(1), loc.size(2))
     # labels = torch.zeros(conf.size(0), conf.size(1), 1)
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    default = default_bar(sample_duration=sample_duration).to(device)
+    default = default_bar.to(device)
     batch_size = loc.size(0)
 
     output = torch.zeros(batch_size, num_classes, top_k, 3).to(device)
@@ -412,13 +392,128 @@ def detection(out, sample_duration, num_classes, top_k, conf_thresh, nms_thresh)
     # [batch_size, all_result_bars_num, 3]
     # all_result_bars_num : 클래스 별 bar의 갯수(최대 top_k * num_classes)
     # 3 : start, end, conf
-    flt = output.contiguous().view(batch_size, -1, 3)
-    _, idx = flt[:, :, -1].sort(1, descending=True)  # [batch_size, bars_num]
-    _, rank = idx.sort(1)  # [batch_size, bars_num], 각 idx 의 등수
-    flt[(rank < top_k).unsqueeze(-1).expand_as(flt)].fill_(0)
+    # 아래 코드는 사용하지 않음
+    # flt = output.contiguous().view(batch_size, -1, 3)
+    # _, idx = flt[:, :, -1].sort(1, descending=True)  # [batch_size, bars_num]
+    # _, rank = idx.sort(1)  # [batch_size, bars_num], 각 idx 의 등수
+    # flt[(rank < top_k).unsqueeze(-1).expand_as(flt)].fill_(0)
 
     return output
 
 
+class Configure:
+    def __init__(self, sample_duration=16, data_type='normal', policy='first'):
+        assert sample_duration in [16, 32]
+        assert policy in ['first', 'second']
+        self.sample_duration = sample_duration
+        self.data_type = data_type
+        self.policy = policy
+
+        channel_l = dict()
+        channel_l[16] = [(2048, 512, 1024), (1024, 256, 512), (512, 128, 256)]
+        channel_l[32] = [(2048, 512, 1024), (1024, 256, 512), (512, 128, 256), (256, 128, 256)]
+        if policy == 'first':
+            self.channel_l = channel_l[sample_duration]
+        else:
+            self.channel_l = channel_l[16]
+
+        if policy == 'first':
+            default_bar_num_list = dict()
+            default_bar_num_list[16] = [15, 7, 3, 1]
+            default_bar_num_list[32] = [31, 15, 7, 3, 1]
+            default_bar = dict()
+            default_bar[16] = torch.zeros(26, 2)
+            default_bar[32] = torch.zeros(57, 2)
+
+            for input_length in default_bar_num_list.keys():
+                count = 0
+                length = 2
+                for default_bar_num in default_bar_num_list[input_length]:
+                    for step in range(default_bar_num):
+                        start = step * (length / 2)
+                        end = step * (length / 2) + length - 1
+                        default_bar[input_length][count, :] = torch.Tensor([start, end])
+                        count += 1
+                    length *= 2
+
+            if data_type == 'normal':
+                self.default_bar = default_bar[sample_duration]
+            else:
+                cut_length = default_bar_num_list[sample_duration][0]
+                if data_type == 'cut':
+                    self.default_bar = default_bar[sample_duration][:cut_length]
+                else:
+                    self.default_bar = default_bar[sample_duration][cut_length:]
+
+        else:
+            new_default_bar_len = [3, 6, 18]
+            new_default_bar_num = [14, 5, 1]
+            new_default_bar_list = torch.zeros(20, 2)
+            count = 0
+            for idx, length in enumerate(new_default_bar_len):
+                step = int(sample_duration / new_default_bar_num[idx])
+                for i in range(new_default_bar_num[idx]):
+                    start = step * i
+                    end = step * i + length - 1
+                    new_default_bar_list[count, :] = torch.Tensor([start, end])
+                    count += 1
+
+            if data_type == 'normal':
+                self.default_bar = new_default_bar_list
+            else:
+                cut_length = new_default_bar_num[0]
+                if data_type == 'cut':
+                    self.default_bar = new_default_bar_list[:cut_length]
+                else:
+                    self.default_bar = new_default_bar_list[cut_length:]
+
+    def get_channel_list(self):
+        return self.channel_l
+
+    def default_bar(self):
+        return self.default_bar()
+
+
 if __name__ == '__main__':
-    print(default_bar(16), default_bar(32))
+    c = Configure(16)
+    print(c.default_bar(16))
+    print(c.default_bar(32))
+    print(c.default_bar(bar_type='second'))
+    classification = {0.5: {2: [], 4: [], 8: [], 16: []},
+                      0.33: {2: [], 4: [], 8: [], 16: []},
+                      'back_gradual_cut':
+                          {0.5: [0, 0, 0], 0.33: [0, 0, 0]}}
+    GT_list = []
+    for transition_len in range(2, 17):
+        for start in range(16 - transition_len + 1):
+            GT_list.append([float(start), float(start) + transition_len - 1])
+    print(GT_list)
+    for GT_start, GT_end in GT_list:
+        GT_length = GT_end - GT_start + 1
+        if GT_length == 2:
+            transition_type = 2
+        elif GT_length == 16:
+            transition_type = 0
+        else:
+            transition_type = 1
+        for start, end in c.default_bar(16):
+            start = start.item()
+            end = end.item()
+            s = max(GT_start, start)
+            e = min(GT_end, end)
+            intersection = max(e - s + 1, 0)
+            length = end - start + 1
+            numerator = intersection
+            denominator = GT_length + length - intersection
+            if numerator/denominator >= 0.5:
+                classification[0.5][length].append("[{}, {}] ({}/{})".format(GT_start, GT_end, numerator, denominator))
+                classification['back_gradual_cut'][0.5][transition_type] += 1
+                if transition_type == 0:
+                    classification['back_gradual_cut'][0.5][1] += 1
+            if numerator/denominator >= 0.33:
+                classification[0.33][length].append("[{}, {}] ({}/{})".format(GT_start, GT_end, numerator, denominator))
+                classification['back_gradual_cut'][0.33][transition_type] += 1
+                if transition_type == 0:
+                    classification['back_gradual_cut'][0.33][1] += 1
+    import json
+    json.dump(classification, open("match_GT_default_bar.json", 'wt'), indent=2)

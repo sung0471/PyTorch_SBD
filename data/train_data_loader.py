@@ -54,10 +54,8 @@ def get_default_video_loader():
 
 def make_dataset(root_path, video_list_path, sample_duration, opt):
     video_list = list()
-    info = dict()
     is_full_data = opt.is_full_data
     loss_type = opt.loss_type
-    use_extra_layer = opt.use_extra_layer
     with open(video_list_path, 'r') as f:
         for line in f.readlines():
             words = line.split(' ')
@@ -79,6 +77,12 @@ def make_dataset(root_path, video_list_path, sample_duration, opt):
                 #     continue
                 # deepSBD_new.txt / detector.txt일 경우
                 video_dir = words[3].split('\n')[0]
+                if opt.train_data_type == 'cut':
+                    if label > 0:
+                        label -= 1
+                elif opt.train_data_type == 'gradual':
+                    if label == 2:
+                        label = 0
                 info = {"video_path": os.path.join(root_path, video_dir, video_name),
                         "begin": begin,
                         "label": label}
