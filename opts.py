@@ -23,6 +23,7 @@ def parse_opts():
     parser.add_argument('--input_type', default='RGB', help='RGB | HSV')
     parser.add_argument('--is_full_data', default=True, help='explain whether full data or not')
     parser.add_argument('--train_data_type', default='cut', type=str, help='normal(cut, gradual) | cut | gradual')
+    parser.add_argument('--layer_policy', default='first', type=str, help='first | second')
     parser.add_argument('--n_classes', default=2, type=int, help='Number of classes, automatic set by train_data_type'
                                                                  'if train_data_type=="normal", 3'
                                                                  'else, 2')
