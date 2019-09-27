@@ -618,7 +618,7 @@ def train(cur_iter, iter_per_epoch, epoch, data_loader, model, criterion, optimi
 
     writer = SummaryWriter('runs/')
     c = Configure(sample_duration=opt.sample_duration, data_type=opt.train_data_type, policy=opt.layer_policy)
-    default = c.default_bar()
+    default = c.get_default_bar()
     print('\n====> Training Start', flush=True)
     while i < total_iter:
         start_time = time.time()
@@ -955,7 +955,10 @@ def main():
     else:
         opt.n_classes = 2
         if opt.train_data_type == 'cut':
-            opt.neg_threshold = opt.neg_threshold[0]
+            if opt.layer_policy == 'second':
+                opt.neg_threshold = opt.neg_threshold[1]
+            else:
+                opt.neg_threshold = opt.neg_threshold[0]
         else:
             opt.neg_threshold = opt.neg_threshold[1]
 
