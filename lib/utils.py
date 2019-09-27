@@ -50,7 +50,7 @@ def load_value_file(file_path):
     return value
 
 
-def calculate_accuracy(outputs, targets, sample_duration, data_type, device):
+def calculate_accuracy(outputs, targets, sample_duration, default, device):
     batch_size = targets.size(0)
     total_length = sample_duration
 
@@ -78,7 +78,7 @@ def calculate_accuracy(outputs, targets, sample_duration, data_type, device):
             top_k = 5
             outputs = (outputs[0], nn.Softmax(dim=-1)(outputs[1]))
             num_classes = outputs[1].size(2)
-            output = detection(outputs, sample_duration, num_classes=num_classes, data_type=data_type,
+            output = detection(outputs, sample_duration, num_classes=num_classes, default_bar=default,
                                top_k=top_k, conf_thresh=0.01, nms_thresh=0.33)
             # output = [batch_size, num_classes, num_bars, [start, end, conf]]
             # pred_num = [batch_size, num_classes]
@@ -287,45 +287,6 @@ def log_sum_exp(x):
     return torch.log(torch.sum(torch.exp(x - x_max), 1, keepdim=True)) + x_max
 
 
-def get_channel_list(sample_duration=16):
-    assert sample_duration in [16, 32]
-
-    channel_l = dict()
-    channel_l[16] = [(2048, 512, 1024), (1024, 256, 512), (512, 128, 256)]
-    channel_l[32] = [(2048, 512, 1024), (1024, 256, 512), (512, 128, 256), (256, 128, 256)]
-
-    return channel_l[sample_duration]
-
-
-def default_bar(sample_duration=16, data_type='normal'):
-    assert sample_duration in [16, 32]
-    default_bar_number_list = dict()
-    default_bar_number_list[16] = [15, 7, 3, 1]
-    default_bar_number_list[32] = [31, 15, 7, 3, 1]
-    default_bar_list = dict()
-    default_bar_list[16] = torch.zeros(26, 2)
-    default_bar_list[32] = torch.zeros(57, 2)
-
-    for key in default_bar_number_list.keys():
-        count = 0
-        length = 2
-        for default_bar_number in default_bar_number_list[key]:
-            for start in range(default_bar_number):
-                default_bar_list[key][count][0] = start * (length / 2)
-                default_bar_list[key][count][1] = start * (length / 2) + length - 1
-                count += 1
-            length *= 2
-
-    if data_type == 'normal':
-        return default_bar_list[sample_duration]
-    else:
-        cut_length = default_bar_number_list[sample_duration][0]
-        if data_type == 'cut':
-            return default_bar_list[sample_duration][:cut_length]
-        else:
-            return default_bar_list[sample_duration][cut_length:]
-
-
 # Original author: Francisco Massa:
 # https://github.com/fmassa/object-detection.torch
 # Ported to PyTorch by Max deGroot (02/01/2017)
@@ -382,12 +343,12 @@ def nms(bars, scores, overlap=0.5, top_k=200):
     return keep, count
 
 
-def detection(out, sample_duration, num_classes, data_type, top_k, conf_thresh, nms_thresh):
+def detection(out, sample_duration, num_classes, default_bar, top_k, conf_thresh, nms_thresh):
     loc, conf = out
     # frame_pos = torch.zeros(loc.size(0), loc.size(1), loc.size(2))
     # labels = torch.zeros(conf.size(0), conf.size(1), 1)
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    default = default_bar(sample_duration=sample_duration, data_type=data_type).to(device)
+    default = default_bar.to(device)
     batch_size = loc.size(0)
 
     output = torch.zeros(batch_size, num_classes, top_k, 3).to(device)
@@ -440,8 +401,84 @@ def detection(out, sample_duration, num_classes, data_type, top_k, conf_thresh, 
     return output
 
 
+class Configure:
+    def __init__(self, sample_duration=16, data_type='normal', policy='first'):
+        assert sample_duration in [16, 32]
+        assert policy in ['first', 'second']
+        self.sample_duration = sample_duration
+        self.data_type = data_type
+        self.policy = policy
+
+        channel_l = dict()
+        channel_l[16] = [(2048, 512, 1024), (1024, 256, 512), (512, 128, 256)]
+        channel_l[32] = [(2048, 512, 1024), (1024, 256, 512), (512, 128, 256), (256, 128, 256)]
+        if policy == 'first':
+            self.channel_l = channel_l[sample_duration]
+        else:
+            self.channel_l = channel_l[16]
+
+        if policy == 'first':
+            default_bar_num_list = dict()
+            default_bar_num_list[16] = [15, 7, 3, 1]
+            default_bar_num_list[32] = [31, 15, 7, 3, 1]
+            default_bar = dict()
+            default_bar[16] = torch.zeros(26, 2)
+            default_bar[32] = torch.zeros(57, 2)
+
+            for input_length in default_bar_num_list.keys():
+                count = 0
+                length = 2
+                for default_bar_num in default_bar_num_list[input_length]:
+                    for step in range(default_bar_num):
+                        start = step * (length / 2)
+                        end = step * (length / 2) + length - 1
+                        default_bar[input_length][count, :] = torch.Tensor([start, end])
+                        count += 1
+                    length *= 2
+
+            if data_type == 'normal':
+                self.default_bar = default_bar[sample_duration]
+            else:
+                cut_length = default_bar_num_list[sample_duration][0]
+                if data_type == 'cut':
+                    self.default_bar = default_bar[sample_duration][:cut_length]
+                else:
+                    self.default_bar = default_bar[sample_duration][cut_length:]
+
+        else:
+            new_default_bar_len = [3, 6, 18]
+            new_default_bar_num = [14, 5, 1]
+            new_default_bar_list = torch.zeros(20, 2)
+            count = 0
+            for idx, length in enumerate(new_default_bar_len):
+                step = int(sample_duration / new_default_bar_num[idx])
+                for i in range(new_default_bar_num[idx]):
+                    start = step * i
+                    end = step * i + length - 1
+                    new_default_bar_list[count, :] = torch.Tensor([start, end])
+                    count += 1
+
+            if data_type == 'normal':
+                self.default_bar = new_default_bar_list
+            else:
+                cut_length = new_default_bar_num[0]
+                if data_type == 'cut':
+                    self.default_bar = new_default_bar_list[:cut_length]
+                else:
+                    self.default_bar = new_default_bar_list[cut_length:]
+
+    def get_channel_list(self):
+        return self.channel_l
+
+    def default_bar(self):
+        return self.default_bar()
+
+
 if __name__ == '__main__':
-    print(default_bar(16), default_bar(32))
+    c = Configure(16)
+    print(c.default_bar(16))
+    print(c.default_bar(32))
+    print(c.default_bar(bar_type='second'))
     classification = {0.5: {2: [], 4: [], 8: [], 16: []},
                       0.33: {2: [], 4: [], 8: [], 16: []},
                       'back_gradual_cut':
@@ -459,7 +496,7 @@ if __name__ == '__main__':
             transition_type = 0
         else:
             transition_type = 1
-        for start, end in default_bar(16):
+        for start, end in c.default_bar(16):
             start = start.item()
             end = end.item()
             s = max(GT_start, start)
