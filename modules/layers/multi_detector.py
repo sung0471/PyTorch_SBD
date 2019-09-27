@@ -19,9 +19,9 @@ class MultiDetector(nn.Module):
         self.sample_duration = kernel_size[0]
         self.policy = policy
         assert self.policy in ['first', 'second']
-        c = Configure(sample_duration=self.sample_duration, policy=self.policy)
+        c = Configure(sample_duration=self.sample_duration, data_type=data_type, policy=self.policy)
         channel_list = c.get_channel_list()
-        self.default_bar = c.default_bar()
+        self.default_bar = c.get_default_bar()
 
         in_channel = in_planes * block.expansion
         if not self.extra_layers:
@@ -65,8 +65,8 @@ class MultiDetector(nn.Module):
                 self.avg_pool = nn.AvgPool3d(kernel_size=pooling_size, stride=1)
                 for idx, (in_channel, mid_channel, out_channel) in enumerate(channel_list):
                     self.extra_layer += [nn.Conv3d(in_channel, mid_channel, kernel_size=1, padding=0, bias=False)]
-                    self.extra_layer += [nn.Conv3d(mid_channel, out_channel, kernel_size=filter_size[i],
-                                                   padding=0, bias=False, stride=stride_size[i])]
+                    self.extra_layer += [nn.Conv3d(mid_channel, out_channel, kernel_size=filter_size[idx],
+                                                   padding=0, bias=False, stride=stride_size[idx])]
                     if idx == 0:
                         if self.data_type in ['normal', 'cut']:
                             self.loc_layer += [nn.Conv3d(out_channel, 2, kernel_size=3, padding=1, bias=False)]
