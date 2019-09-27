@@ -20,7 +20,7 @@ class MultiLoss(nn.Module):
         # self.reg_loss = nn.MSELoss()
         self.conf_loss = nn.CrossEntropyLoss()
         c = Configure(sample_duration=sample_duration, data_type=data_type, policy=policy)
-        self.default_bar = c.default_bar()
+        self.default_bar = c.get_default_bar()
 
     def forward(self, predictions, targets):
         total_length = self.sample_duration
