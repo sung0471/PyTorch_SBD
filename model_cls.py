@@ -32,7 +32,7 @@ def generate_model(opt, model_type, device):
                                           num_classes=opt.n_classes, sample_size=opt.sample_size,
                                           sample_duration=opt.sample_duration, use_depthwise=False,
                                           loss_type=opt.loss_type, use_extra_layer=opt.use_extra_layer,
-                                          phase=opt.phase, data_type=opt.train_data_type)
+                                          phase=opt.phase, data_type=opt.train_data_type, policy=opt.layer_policy)
 
     # 19.7.31. add deepcopy
     test_model = copy.deepcopy(model).to(device)
