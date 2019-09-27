@@ -421,9 +421,9 @@ class Configure:
             default_bar_num_list = dict()
             default_bar_num_list[16] = [15, 7, 3, 1]
             default_bar_num_list[32] = [31, 15, 7, 3, 1]
-            default_bar = dict()
-            default_bar[16] = torch.zeros(26, 2)
-            default_bar[32] = torch.zeros(57, 2)
+            default_bar_list = dict()
+            default_bar_list[16] = torch.zeros(26, 2)
+            default_bar_list[32] = torch.zeros(57, 2)
 
             for input_length in default_bar_num_list.keys():
                 count = 0
@@ -432,18 +432,18 @@ class Configure:
                     for step in range(default_bar_num):
                         start = step * (length / 2)
                         end = step * (length / 2) + length - 1
-                        default_bar[input_length][count, :] = torch.Tensor([start, end])
+                        default_bar_list[input_length][count, :] = torch.Tensor([start, end])
                         count += 1
                     length *= 2
 
             if data_type == 'normal':
-                self.default_bar = default_bar[sample_duration]
+                self.default_bar = default_bar_list[sample_duration]
             else:
                 cut_length = default_bar_num_list[sample_duration][0]
                 if data_type == 'cut':
-                    self.default_bar = default_bar[sample_duration][:cut_length]
+                    self.default_bar = default_bar_list[sample_duration][:cut_length]
                 else:
-                    self.default_bar = default_bar[sample_duration][cut_length:]
+                    self.default_bar = default_bar_list[sample_duration][cut_length:]
 
         else:
             new_default_bar_len = [3, 6, 18]
@@ -470,8 +470,8 @@ class Configure:
     def get_channel_list(self):
         return self.channel_l
 
-    def default_bar(self):
-        return self.default_bar()
+    def get_default_bar(self):
+        return self.default_bar
 
 
 if __name__ == '__main__':
