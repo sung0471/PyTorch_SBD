@@ -1,12 +1,12 @@
 import torch
 import torch.nn as nn
 from modules.layers.multi_detector import MultiDetector
-from lib.utils import encoding, cal_iou, log_sum_exp, default_bar
+from lib.utils import encoding, cal_iou, log_sum_exp, Configure
 
 
 class MultiLoss(nn.Module):
     def __init__(self, device, extra_layers=False, sample_duration=16, num_classes=3,
-                 data_type='normal', neg_ratio=3, neg_threshold=(0.33, 0.5)):
+                 data_type='normal', policy='first', neg_ratio=3, neg_threshold=(0.33, 0.5)):
         super(MultiLoss, self).__init__()
 
         self.device = device
@@ -19,7 +19,8 @@ class MultiLoss(nn.Module):
         self.reg_loss = nn.SmoothL1Loss()
         # self.reg_loss = nn.MSELoss()
         self.conf_loss = nn.CrossEntropyLoss()
-        self.default_bar = default_bar(sample_duration=sample_duration, data_type=data_type)
+        c = Configure(sample_duration=sample_duration, data_type=data_type, policy=policy)
+        self.default_bar = c.default_bar()
 
     def forward(self, predictions, targets):
         total_length = self.sample_duration
