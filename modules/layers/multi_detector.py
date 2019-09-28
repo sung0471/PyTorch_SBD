@@ -120,8 +120,9 @@ class MultiDetector(nn.Module):
             loc_list = list()
             conf_list = list()
             if self.policy == 'first':
-                loc_list += [self.loc_layer[0](x).view(batch_size, -1)]
-                conf_list += [self.conf_layer[0](x).view(batch_size, -1)]
+                if self.data_type in ['normal', 'cut']:
+                    loc_list += [self.loc_layer[0](x).view(batch_size, -1)]
+                    conf_list += [self.conf_layer[0](x).view(batch_size, -1)]
                 for i in range(0, len(self.extra_layer), 2):
                     x = self.extra_layer[i](x)
                     x = self.extra_layer[i + 1](x)
