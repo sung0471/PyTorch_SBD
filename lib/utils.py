@@ -446,15 +446,15 @@ class Configure:
                     self.default_bar = default_bar_list[sample_duration][cut_length:]
 
         else:
-            new_default_bar_len = [3, 6, 18]
-            new_default_bar_num = [14, 5, 1]
+            new_default_bar_len = [3, 6, 12]
+            new_default_bar_num = [14, 4, 2]
             new_default_bar_list = torch.zeros(20, 2)
+            step = [1, 3, 3]
             count = 0
             for idx, length in enumerate(new_default_bar_len):
-                step = int(sample_duration / new_default_bar_num[idx])
                 for i in range(new_default_bar_num[idx]):
-                    start = step * i
-                    end = step * i + length - 1
+                    start = step[idx] * i
+                    end = step[idx] * i + length - 1
                     new_default_bar_list[count, :] = torch.Tensor([start, end])
                     count += 1
 
@@ -475,10 +475,15 @@ class Configure:
 
 
 if __name__ == '__main__':
-    c = Configure(16)
-    print(c.default_bar(16))
-    print(c.default_bar(32))
-    print(c.default_bar(bar_type='second'))
+    c_16 = Configure(16, policy='first')
+    c_32 = Configure(32, policy='first')
+    c_new = Configure(policy='second')
+    default_bar_16 = c_16.get_default_bar()
+    default_bar_32 = c_32.get_default_bar()
+    default_bar_new = c_new.get_default_bar()
+    print(default_bar_16)
+    print(default_bar_32)
+    print(default_bar_new)
     classification = {0.5: {2: [], 4: [], 8: [], 16: []},
                       0.33: {2: [], 4: [], 8: [], 16: []},
                       'back_gradual_cut':
@@ -496,7 +501,7 @@ if __name__ == '__main__':
             transition_type = 0
         else:
             transition_type = 1
-        for start, end in c.default_bar(16):
+        for start, end in default_bar_16:
             start = start.item()
             end = end.item()
             s = max(GT_start, start)
