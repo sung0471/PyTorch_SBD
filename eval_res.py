@@ -58,6 +58,7 @@ def eval(predict_path, out_log_path, gt_path, train_data_type):
             _gts = gts[videoname]['transitions']
             gt['cut'] = [(begin, end) for begin, end in _gts if end - begin == 1]
             gt['gradual'] = [(begin, end) for begin, end in _gts if end - begin > 1]
+            gt['all'] = gt['cut'] + gt['gradual']
 
             _predicts = predicts[videoname]
             for type in transition_type:
@@ -86,7 +87,7 @@ def eval(predict_path, out_log_path, gt_path, train_data_type):
                 fn[type] = gt_len[type] - correct[type]
 
             if len(transition_type) == 2:
-                correct['all'] = get_union_cnt(predict['cut'] + predict['gradual'], _gts)
+                correct['all'] = get_union_cnt(predict['cut'] + predict['gradual'], gt['all'])
                 correct_sum['all'] += correct['all']
 
             # precision = tp / (tp + fp)
