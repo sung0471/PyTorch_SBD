@@ -82,7 +82,15 @@ class MultiLoss(nn.Module):
                 conf = labels[best_truth_idx] + 1   # Shape: [default_bar_num]
 
                 background_conf_idx = conf == 1         # get index of background
-                conf[best_truth_overlap < self.neg_threshold] = 0     # label as negative
+                if self.neg_threshold == set:
+                    neg_thresh_cut = self.neg_threshold[0]
+                    neg_thresh_gradual = self.neg_threshold[1]
+                    cut_idx = conf == 2
+                    gradual_idx = conf == 3
+                    conf[cut_idx and best_truth_overlap < neg_thresh_cut] = 0
+                    conf[gradual_idx and best_truth_overlap < neg_thresh_gradual] = 0
+                else:
+                    conf[best_truth_overlap < self.neg_threshold] = 0     # label as negative
                 conf[background_conf_idx] = 1           # set label to background
 
                 assert matches.size() == self.default_bar.size(),\
