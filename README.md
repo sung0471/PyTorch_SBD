@@ -6,11 +6,9 @@ We implement deepSBD in this repository. There are 2 backbones that can be selec
 
 ## Resources
 1. The trained model for Alexnet-like backbone. [BaiduYun](https://pan.baidu.com/s/16q3CNuUhLAGkm21PPOqUSg), [Google Drive](https://drive.google.com/open?id=145NCxLhgdrKPIYm-qgp1SRYU_GFmzxxX)
-2. The trained model for ResNet-18 backbone. [BaiduYun](https://pan.baidu.com/s/1Bx2uVVQOuEnTxdBBGV3uCQ), [Google Drive](https://drive.google.com/open?id=16nPpsziwhBdCLgSiVuWCIJt-rnXElU6j)
-3. The pretrained [model](https://drive.google.com/open?id=10h_axdnkjupEDYe-OiUzm5ALX8w5DX_5) for ResNet-18 backbone.
 
-## Training
-Please refer to `train.sh`
-
-## Testing
-Add '--no_train' options to `train.sh`.
+# Traning and Testing
+1. Training : opts.py → phase='train'
+2. Testing : opts.py → phase='test'
+3. Training and Testing : opts.py → phase='full'
+4. Run `run_[OS_type].sh`
