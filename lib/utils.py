@@ -446,10 +446,10 @@ class Configure:
                     self.default_bar = default_bar_list[sample_duration][cut_length:]
 
         else:
-            new_default_bar_len = [3, 6, 12]
-            new_default_bar_num = [14, 4, 2]
-            new_default_bar_list = torch.zeros(20, 2)
-            step = [1, 3, 3]
+            new_default_bar_len = [2, 4, 8]
+            new_default_bar_num = [15, 7, 3]
+            step = [1, 2, 4]
+            new_default_bar_list = torch.zeros(25, 2)
             count = 0
             for idx, length in enumerate(new_default_bar_len):
                 for i in range(new_default_bar_num[idx]):
