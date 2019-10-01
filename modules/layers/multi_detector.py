@@ -59,9 +59,9 @@ class MultiDetector(nn.Module):
 
             else:
                 pooling_size = (1, kernel_size[1], kernel_size[2])
-                filter_size = [(2, 1, 1), (3, 1, 1), (3, 1, 1)]
+                filter_size = [(2, 1, 1), (2, 1, 1), (2, 1, 1)]
                 dilation_size = [1, (2, 1, 1), (2, 1, 1)]
-                padding_size = [0, (2, 0, 0), (2, 0, 0)]
+                padding_size = [0, 0, 0]
                 stride_size = [1, (2, 1, 1), (2, 1, 1)]
                 # self.short_cut = list()
                 self.avg_pool = nn.AvgPool3d(kernel_size=pooling_size, stride=1)
