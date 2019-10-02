@@ -88,7 +88,10 @@ def eval(predict_path, out_log_path, gt_path, train_data_type):
 
             if len(transition_type) == 2:
                 correct['all'] = get_union_cnt(predict['cut'] + predict['gradual'], gt['all'])
-                correct_sum['all'] += correct['all']
+                if 'all' in correct_sum.keys():
+                    correct_sum['all'] += correct['all']
+                else:
+                    correct_sum['all'] = 0
 
             # precision = tp / (tp + fp)
             # recall = tp / (tp + fn)
