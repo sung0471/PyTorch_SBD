@@ -66,27 +66,55 @@ class MultiDetector(nn.Module):
                 # self.short_cut = list()
                 self.avg_pool = nn.AvgPool3d(kernel_size=pooling_size, stride=1)
                 for idx, (in_channel, mid_channel, out_channel) in enumerate(channel_list):
-                    self.extra_layer += [nn.Conv3d(in_channel, mid_channel, kernel_size=1, padding=0, bias=False)]
-                    self.extra_layer += [nn.Conv3d(mid_channel, out_channel, bias=False,
-                                                   kernel_size=filter_size[idx], dilation=dilation_size[idx],
-                                                   padding=padding_size[idx], stride=stride_size[idx])]
-                    if idx == 0:
-                        if self.data_type in ['normal', 'cut']:
-                            self.loc_layer += [nn.Conv3d(out_channel, 2, kernel_size=3, padding=1, bias=False)]
-                            self.conf_layer += [nn.Conv3d(out_channel, num_classes, kernel_size=3, padding=1, bias=False)]
+                    is_divide = True
+                    if not is_divide:
+                        self.extra_layer += [nn.Conv3d(in_channel, mid_channel, bias=False, kernel_size=1, padding=0)]
+                        self.extra_layer += [nn.Conv3d(mid_channel, out_channel, bias=False,
+                                                       kernel_size=filter_size[idx], dilation=dilation_size[idx],
+                                                       padding=padding_size[idx], stride=stride_size[idx])]
+                        if idx == 0:
+                            if self.data_type in ['normal', 'cut']:
+                                self.loc_layer += [nn.Conv3d(out_channel, 2, kernel_size=3, padding=1, bias=False)]
+                                self.conf_layer += [nn.Conv3d(out_channel, num_classes, kernel_size=3, padding=1, bias=False)]
+                        else:
+                            # self.short_cut += [nn.Conv3d(in_channel, out_channel,
+                            #                              kernel_size=1, padding=0, bias=False, stride=(2, 1, 1))]
+                            if self.data_type in ['normal', 'gradual']:
+                                self.loc_layer += [nn.Conv3d(out_channel, 2, kernel_size=3, padding=1, bias=False)]
+                                self.conf_layer += [nn.Conv3d(out_channel, num_classes, kernel_size=3, padding=1, bias=False)]
+                        if self.data_type in ['cut']:
+                            break
                     else:
-                        # self.short_cut += [nn.Conv3d(in_channel, out_channel,
-                        #                              kernel_size=1, padding=0, bias=False, stride=(2, 1, 1))]
-                        if self.data_type in ['normal', 'gradual']:
-                            self.loc_layer += [nn.Conv3d(out_channel, 2, kernel_size=3, padding=1, bias=False)]
-                            self.conf_layer += [nn.Conv3d(out_channel, num_classes, kernel_size=3, padding=1, bias=False)]
-                    if self.data_type in ['cut']:
+                        filter_size = [(4, 1, 1), (2, 1, 1), (2, 1, 1)]
+                        dilation_size = [1, (3, 1, 1), (7, 1, 1)]
+                        padding_size = [(1, 0, 0), 0, 0]
+                        stride_size = [1, (2, 1, 1), (4, 1, 1)]
+                        for filter_idx, _ in enumerate(filter_size):
+                            if filter_idx == 0 and self.data_type in ['normal', 'cut']:
+                                self.extra_layer += [nn.Conv3d(in_channel, mid_channel, bias=False,
+                                                               kernel_size=1, padding=0)]
+                                self.extra_layer += [nn.Conv3d(mid_channel, out_channel, bias=False,
+                                                               kernel_size=filter_size[filter_idx], dilation=dilation_size[filter_idx],
+                                                               padding=padding_size[filter_idx], stride=stride_size[filter_idx])]
+                                self.loc_layer += [nn.Conv3d(out_channel, 2, kernel_size=3, padding=1, bias=False)]
+                                self.conf_layer += [nn.Conv3d(out_channel, num_classes, kernel_size=3, padding=1, bias=False)]
+                                if self.data_type in ['cut']:
+                                    break
+                                continue
+                            if filter_idx != 0 and self.data_type in ['normal', 'gradual']:
+                                self.extra_layer += [nn.Conv3d(in_channel, mid_channel, bias=False,
+                                                               kernel_size=1, padding=0)]
+                                self.extra_layer += [nn.Conv3d(mid_channel, out_channel, bias=False,
+                                                               kernel_size=filter_size[filter_idx], dilation=dilation_size[filter_idx],
+                                                               padding=padding_size[filter_idx], stride=stride_size[filter_idx])]
+                                self.loc_layer += [nn.Conv3d(out_channel, 2, kernel_size=3, padding=1, bias=False)]
+                                self.conf_layer += [nn.Conv3d(out_channel, num_classes, kernel_size=3, padding=1, bias=False)]
                         break
 
-                self.loc_layer = nn.Sequential(*self.loc_layer)
-                self.conf_layer = nn.Sequential(*self.conf_layer)
                 self.extra_layer = nn.Sequential(*self.extra_layer)
                 self.relu = nn.ReLU(inplace=True)
+                self.loc_layer = nn.Sequential(*self.loc_layer)
+                self.conf_layer = nn.Sequential(*self.conf_layer)
 
             if self.phase == 'test':
                 self.softmax = nn.Softmax(dim=-1)
@@ -140,23 +168,36 @@ class MultiDetector(nn.Module):
 
             else:
                 x = self.avg_pool(x)
-                for i in range(0, len(self.extra_layer), 2):
-                    out = self.extra_layer[i](x)
-                    out = self.relu(out)
-                    out = self.extra_layer[i + 1](out)
-                    if self.short_cut is not None and i > 0:
-                        short_cut = self.short_cut[i](x)
-                        out += short_cut
-                    x = self.relu(out)
+                is_divide = True
+                if not is_divide:
+                    for i in range(0, len(self.extra_layer), 2):
+                        out = self.extra_layer[i](x)
+                        out = self.relu(out)
+                        out = self.extra_layer[i + 1](out)
+                        if self.short_cut is not None and i > 0:
+                            short_cut = self.short_cut[i](x)
+                            out += short_cut
+                        x = self.relu(out)
 
-                    idx = int(i / 2)
-                    if self.data_type in ['gradual']:
-                        if i == 0:
-                            continue
-                        else:
-                            idx -= 1
-                    loc_list += [self.loc_layer[idx](x).view(batch_size, -1)]
-                    conf_list += [self.conf_layer[idx](x).view(batch_size, -1)]
+                        idx = int(i / 2)
+                        if self.data_type in ['gradual']:
+                            if i == 0:
+                                continue
+                            else:
+                                idx -= 1
+                        loc_list += [self.loc_layer[idx](x).view(batch_size, -1)]
+                        conf_list += [self.conf_layer[idx](x).view(batch_size, -1)]
+                else:
+
+                    for i in range(0, len(self.extra_layer), 2):
+                        out = self.extra_layer[i](x)
+                        out = self.relu(out)
+                        out = self.extra_layer[i + 1](out)
+                        out = self.relu(out)
+
+                        idx = int(i / 2)
+                        loc_list += [self.loc_layer[idx](out).view(batch_size, -1)]
+                        conf_list += [self.conf_layer[idx](out).view(batch_size, -1)]
 
             loc_x = loc_list[0]
             conf_x = conf_list[0]
