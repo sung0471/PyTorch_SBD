@@ -958,6 +958,7 @@ def main():
     assert opt.dataset in ['ClipShots', 'RAI']
     opt.root_dir = os.path.join('data/', opt.dataset, 'videos/')
     opt.test_list_path = os.path.join('data/', opt.dataset, 'video_lists/test.txt')
+    opt.gt_dir = os.path.join('data/', opt.dataset, 'annotations/test.json')
 
     # iter_per_epoch을 opt.is_full_data와 opt.batch_size에 맞게 자동으로 조정
     if opt.iter_per_epoch == 0:
