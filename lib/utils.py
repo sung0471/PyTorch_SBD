@@ -354,6 +354,9 @@ def detection(out, sample_duration, num_classes, default_bar, conf_thresh, bound
     output = torch.zeros(batch_size, num_classes, default.size(0), 3).to(device)
     conf_pred = conf.transpose(2, 1)
     pred_num = torch.zeros(batch_size, num_classes, dtype=torch.int32)
+
+    threshold = 0.6
+
     for batch_num in range(batch_size):
         total_length = sample_duration
 
@@ -386,12 +389,13 @@ def detection(out, sample_duration, num_classes, default_bar, conf_thresh, bound
 
             count = 0
             if cl == 0:
-                valid_idx = scores[idx] >= 0.1
+                valid_idx = scores >= threshold
                 count = valid_idx.int().sum().clone().detach().item()
+                # count = idx.size(0)
                 idx = idx[:count]
                 output[batch_num, cl, :count] = torch.cat((bars[idx], scores[idx].unsqueeze(1)), 1)  # [top_k, 3]
             else:
-                while count != idx.size(0) and scores[idx[count]].item() >= 0.1:
+                while count != idx.size(0) and scores[idx[count]].item() >= threshold:
                     output[batch_num, cl, count, :-1] = torch.round(bars[idx[count]] + boundary[0])
                     if boundary[0] <= output[batch_num, cl, count, 0] <= boundary[1] \
                             and boundary[0] <= output[batch_num, cl, count, 1] <= boundary[1]:
