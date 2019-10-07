@@ -78,27 +78,27 @@ def calculate_accuracy(outputs, targets, sample_duration, default, device):
             top_k = 5
             outputs = (outputs[0], nn.Softmax(dim=-1)(outputs[1]))
             num_classes = outputs[1].size(2)
-            output = detection(outputs, sample_duration, num_classes=num_classes, default_bar=default,
-                               top_k=top_k, conf_thresh=0.01, nms_thresh=0.33)
+            output, pred_num = detection(outputs, sample_duration, num_classes=num_classes, default_bar=default,
+                                         conf_thresh=0.01)
             # output = [batch_size, num_classes, num_bars, [start, end, conf]]
             # pred_num = [batch_size, num_classes]
 
             # output = [batch_size, num_classes, num_bars, [start, end, conf]]
-            pred_num = torch.zeros(batch_size, num_classes, dtype=torch.int32)
-            for batch_num in range(batch_size):
-                for cls in range(num_classes):
-                    i = 0
-                    while output[batch_num, cls, i, -1] >= 0.6:
-                        start = output[batch_num, cls, i, 0]
-                        end = output[batch_num, cls, i, 1]
-                        if 0 <= start <= 15 and 0 <= end <= 15:
-                            pass
-                        else:
-                            output[batch_num, cls, i, :-1] = torch.zeros(1, 2)
-                        i += 1
-                        if i == top_k:
-                            break
-                    pred_num[batch_num, cls] = i
+            # pred_num = torch.zeros(batch_size, num_classes, dtype=torch.int32)
+            # for batch_num in range(batch_size):
+            #     for cls in range(num_classes):
+            #         i = 0
+            #         while output[batch_num, cls, i, -1] >= 0.6:
+            #             start = output[batch_num, cls, i, 0]
+            #             end = output[batch_num, cls, i, 1]
+            #             if 0 <= start <= 15 and 0 <= end <= 15:
+            #                 pass
+            #             else:
+            #                 output[batch_num, cls, i, :-1] = torch.zeros(1, 2)
+            #             i += 1
+            #             if i == top_k:
+            #                 break
+            #         pred_num[batch_num, cls] = i
 
             total_bars_num = pred_num.int().sum().clone().detach().data
             loc_pred = torch.zeros(total_bars_num, 2).to(device)
@@ -290,7 +290,7 @@ def log_sum_exp(x):
 # Original author: Francisco Massa:
 # https://github.com/fmassa/object-detection.torch
 # Ported to PyTorch by Max deGroot (02/01/2017)
-def nms(bars, scores, overlap=0.5, top_k=200):
+def nms(bars, scores, overlap=0.5, top_k=0):
     """Apply non-maximum suppression at test time to avoid detecting too many
     overlapping bounding boxes for a given object.
     Args:
@@ -343,7 +343,7 @@ def nms(bars, scores, overlap=0.5, top_k=200):
     return keep, count
 
 
-def detection(out, sample_duration, num_classes, default_bar, top_k, conf_thresh, nms_thresh):
+def detection(out, sample_duration, num_classes, default_bar, conf_thresh, boundaries=None):
     loc, conf = out
     # frame_pos = torch.zeros(loc.size(0), loc.size(1), loc.size(2))
     # labels = torch.zeros(conf.size(0), conf.size(1), 1)
@@ -351,9 +351,10 @@ def detection(out, sample_duration, num_classes, default_bar, top_k, conf_thresh
     default = default_bar.to(device)
     batch_size = loc.size(0)
 
-    output = torch.zeros(batch_size, num_classes, top_k, 3).to(device)
+    output = torch.zeros(batch_size, num_classes, default.size(0), 3).to(device)
     conf_pred = conf.transpose(2, 1)
-    for i in range(batch_size):
+    pred_num = torch.zeros(batch_size, num_classes, dtype=torch.int32)
+    for batch_num in range(batch_size):
         total_length = sample_duration
 
         # assert loc.size(1) == self.default_bar.size(0)
@@ -362,8 +363,15 @@ def detection(out, sample_duration, num_classes, default_bar, top_k, conf_thresh
         # label = conf[i, :]
         # labels[i, :] = torch.argmax(label, dim=1).view(-1, 1)   # [default_num, 1]
 
-        decoded_bars = decoding(loc[i, :], total_length, default_bar=default)  # [default_num, 2]
-        conf_scores = conf_pred[i].clone().detach()  # [3, default_num]
+        decoded_bars = decoding(loc[batch_num, :], total_length, default_bar=default)  # [default_num, 2]
+        conf_scores = conf_pred[batch_num].clone().detach()  # [3, default_num]
+
+        if boundaries is not None:
+            bound_start = boundaries[batch_num]
+            bound_end = boundaries[batch_num] + sample_duration - 1
+            boundary = torch.cat((bound_start.view(-1), bound_end.view(-1)), 0).float()
+        else:
+            boundary = torch.Tensor([0, sample_duration - 1]).float()
 
         for cl in range(num_classes):
             c_mask = conf_scores[cl].gt(conf_thresh)  # [default_num]
@@ -374,20 +382,39 @@ def detection(out, sample_duration, num_classes, default_bar, top_k, conf_thresh
                 continue
             l_mask = c_mask.unsqueeze(1).expand_as(decoded_bars)  # [default_num, 2]
             bars = decoded_bars[l_mask].view(-1, 2)  # [num, 2]
+            v, idx = scores.sort(0, descending=True)  # sort in descending order
 
+            count = 0
             if cl == 0:
-                v, idx = scores.sort(0, descending=True)  # sort in descending order
-                total_num = idx.size(0) if idx.size(0) < top_k else top_k
-                idx = idx[:total_num]
-                output[i, cl, :total_num] = \
-                    torch.cat((bars[idx],
-                               scores[idx].unsqueeze(1)), 1)  # [top_k, 3]
+                valid_idx = scores[idx] >= 0.1
+                count = valid_idx.int().sum().clone().detach().item()
+                idx = idx[:count]
+                output[batch_num, cl, :count] = torch.cat((bars[idx], scores[idx].unsqueeze(1)), 1)  # [top_k, 3]
             else:
-                # idx of highest scoring and non-overlapping boxes per class
-                ids, count = nms(bars, scores, nms_thresh, top_k)
-                output[i, cl, :count] = \
-                    torch.cat((bars[ids[:count]],
-                               scores[ids[:count]].unsqueeze(1)), 1)  # [count, 3]
+                while count != idx.size(0) and scores[idx[count]].item() >= 0.1:
+                    output[batch_num, cl, count, :-1] = torch.round(bars[idx[count]] + boundary[0])
+                    if boundary[0] <= output[batch_num, cl, count, 0] <= boundary[1] \
+                            and boundary[0] <= output[batch_num, cl, count, 1] <= boundary[1]:
+                        pass
+                    else:
+                        output[batch_num, cl, count, :-1] = torch.zeros(1, 2)
+                    output[batch_num, cl, count, -1] = scores[idx[count]]
+                    count += 1
+
+            pred_num[batch_num, cl] = count
+
+            # if cl == 0:
+            #     total_num = idx.size(0) if idx.size(0) < top_k else top_k
+            #     idx = idx[:total_num]
+            #     output[batch_num, cl, :total_num] = \
+            #         torch.cat((bars[idx],
+            #                    scores[idx].unsqueeze(1)), 1)  # [top_k, 3]
+            # else:
+            #     # idx of highest scoring and non-overlapping boxes per class
+            #     ids, count = nms(bars, scores, nms_thresh, top_k)
+            #     output[batch_num, cl, :count] = \
+            #         torch.cat((bars[ids[:count]],
+            #                    scores[ids[:count]].unsqueeze(1)), 1)  # [count, 3]
 
     # [batch_size, all_result_bars_num, 3]
     # all_result_bars_num : 클래스 별 bar의 갯수(최대 top_k * num_classes)
@@ -398,7 +425,7 @@ def detection(out, sample_duration, num_classes, default_bar, top_k, conf_thresh
     # _, rank = idx.sort(1)  # [batch_size, bars_num], 각 idx 의 등수
     # flt[(rank < top_k).unsqueeze(-1).expand_as(flt)].fill_(0)
 
-    return output
+    return output, pred_num
 
 
 class Configure:
