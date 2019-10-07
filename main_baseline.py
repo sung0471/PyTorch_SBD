@@ -1012,7 +1012,6 @@ def main():
 
     assert opt.input_type in ['RGB', 'HSV']
     out_path = os.path.join(opt.result_dir, 'results.json')
-    out_log_path = os.path.join(opt.result_dir, 'tp_tn_fp_fn.json')
     if opt.phase == 'full':
         phase_list = ['train', 'test']
     else:
@@ -1030,7 +1029,7 @@ def main():
                 if not os.path.exists(out_path):
                     res = test_dataset(opt, device, model)
                     json.dump(res, open(out_path, 'w'))
-                eval_res.eval(out_path, out_log_path, opt.gt_dir, opt.train_data_type)
+                eval_res.eval(opt.result_dir, opt.gt_dir, opt.train_data_type)
 
 
 if __name__ == '__main__':
