@@ -12,12 +12,23 @@ def if_overlap(begin1, end1, begin2, end2):
 
 def get_union_cnt(set1, set2):
     cnt = 0
+    tp = list()
+    fp = list()
+    fn = list()
     for begin, end in set1:
+        gt_check = False
         for _begin, _end in set2:
             if if_overlap(begin, end, _begin, _end):
                 cnt += 1
+                tp.append([_begin, _end])
+                gt_check = not gt_check
                 break
-    return cnt
+        if not gt_check:
+            fn.append([begin, end])
+    for transition in set2:
+        if transition not in tp:
+            fp.append(transition)
+    return cnt, (tp, fp, fn)
 
 
 def pre_recall_f1(a, b, c):
@@ -29,7 +40,8 @@ def pre_recall_f1(a, b, c):
     return precision, recall, f1
 
 
-def eval(predict_path, out_log_path, gt_path, train_data_type):
+def eval(result_dir, gt_path, train_data_type):
+    predict_path = os.path.join(result_dir, 'results.json')
     predicts = json.load(open(predict_path))
     gts = json.load(open(gt_path))
     print(len(predicts))
@@ -53,6 +65,7 @@ def eval(predict_path, out_log_path, gt_path, train_data_type):
     tn = dict()
     fp = dict()
     fn = dict()
+    tp_fp_fn_list = dict()
     for videoname, labels in gts.items():
         if videoname in predicts:
             _gts = gts[videoname]['transitions']
@@ -61,9 +74,14 @@ def eval(predict_path, out_log_path, gt_path, train_data_type):
             gt['all'] = gt['cut'] + gt['gradual']
 
             _predicts = predicts[videoname]
+            tp_fp_fn_list[videoname] = dict()
             for type in transition_type:
                 predict[type] = _predicts[type]
-                correct[type] = get_union_cnt(gt[type], predict[type])
+                correct[type], value_tuple = get_union_cnt(gt[type], predict[type])
+                tp_fp_fn_list[videoname][type] = dict()
+                tp_fp_fn_list[videoname][type]['tp'] = value_tuple[0]
+                tp_fp_fn_list[videoname][type]['fp'] = value_tuple[1]
+                tp_fp_fn_list[videoname][type]['fn'] = value_tuple[2]
                 if type in correct_sum.keys():
                     correct_sum[type] += correct[type]
                 else:
@@ -87,7 +105,7 @@ def eval(predict_path, out_log_path, gt_path, train_data_type):
                 fn[type] = gt_len[type] - correct[type]
 
             if len(transition_type) == 2:
-                correct['all'] = get_union_cnt(predict['cut'] + predict['gradual'], gt['all'])
+                correct['all'], _ = get_union_cnt(gt['all'], predict['cut'] + predict['gradual'])
                 if 'all' in correct_sum.keys():
                     correct_sum['all'] += correct['all']
                 else:
@@ -105,7 +123,10 @@ def eval(predict_path, out_log_path, gt_path, train_data_type):
             print("{} not found".format(videoname))
             raise Exception()
 
-    json.dump(tp_tn_fp_fn, open(out_log_path, 'w'), indent=2)
+    tp_tn_fp_fn_path = os.path.join(result_dir, 'tp_tn_fp_fn.json')
+    tp_fp_fn_list_path = os.path.join(result_dir, 'tp_fp_fn_list.json')
+    json.dump(tp_tn_fp_fn, open(tp_tn_fp_fn_path, 'w'), indent=2)
+    json.dump(tp_fp_fn_list, open(tp_fp_fn_list_path, 'w'), indent=2)
 
     print("group\tprecision\trecall\tf1score")
     for type in transition_type:
