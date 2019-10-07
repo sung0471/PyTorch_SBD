@@ -953,6 +953,12 @@ def main():
     #     torch.backends.benchmark = True
     #     model=model.to(device)
 
+    # `19.10.8. add
+    # check dataset and set opt.root_dir
+    assert opt.dataset in ['ClipShots', 'RAI']
+    opt.root_dir = os.path.join('data/', opt.dataset, 'videos/')
+    opt.test_list_path = os.path.join('data/', opt.dataset, 'video_lists/test.txt')
+
     # iter_per_epoch을 opt.is_full_data와 opt.batch_size에 맞게 자동으로 조정
     if opt.iter_per_epoch == 0:
         if opt.is_full_data:
