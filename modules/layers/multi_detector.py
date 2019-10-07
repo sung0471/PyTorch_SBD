@@ -5,7 +5,7 @@ from lib.utils import Configure, decoding, detection
 
 class MultiDetector(nn.Module):
     def __init__(self, block, in_planes, kernel_size=(16, 2, 2), num_classes=3, extra_layers=False,
-                 phase='train', data_type='normal', policy='first', conf_thresh=0.01, nms_thresh=0.33, top_k=5):
+                 phase='train', data_type='normal', policy='first', conf_thresh=0.01):
         super(MultiDetector, self).__init__()
 
         self.num_classes = num_classes
@@ -14,8 +14,6 @@ class MultiDetector(nn.Module):
         self.phase = phase
         self.data_type = data_type
         self.conf_thresh = conf_thresh
-        self.nms_thresh = nms_thresh
-        self.top_k = top_k
         self.sample_duration = kernel_size[0]
         self.policy = policy
         assert self.policy in ['first', 'second']
@@ -111,10 +109,10 @@ class MultiDetector(nn.Module):
                                 self.conf_layer += [nn.Conv3d(out_channel, num_classes, kernel_size=3, padding=1, bias=False)]
                         break
 
-                self.extra_layer = nn.Sequential(*self.extra_layer)
-                self.relu = nn.ReLU(inplace=True)
                 self.loc_layer = nn.Sequential(*self.loc_layer)
                 self.conf_layer = nn.Sequential(*self.conf_layer)
+                self.extra_layer = nn.Sequential(*self.extra_layer)
+                self.relu = nn.ReLU(inplace=True)
 
             if self.phase == 'test':
                 self.softmax = nn.Softmax(dim=-1)
@@ -212,47 +210,48 @@ class MultiDetector(nn.Module):
             # gradual : loc[8, 11, 2], conf[8, 11, num_classes]
             if self.phase == 'test':
                 out = (out[1], self.softmax(out[1]))
-                output = detection(out, self.sample_duration, self.num_classes, self.default_bar,
-                                   self.top_k, self.conf_thresh, self.nms_thresh)
+                output, pred_num = detection(out, self.sample_duration, self.num_classes, self.default_bar,
+                                             self.conf_thresh, boundaries=start_boundaries)
 
-                # output = [batch_size, num_classes, num_bars, [start, end, conf]]
-                pred_num = torch.zeros(batch_size, self.num_classes, dtype=torch.int32)
-                for batch_num in range(batch_size):
-                    for cls in range(1, self.num_classes):
-                        i = 0
-                        while output[batch_num, cls, i, -1] >= 0.6:
-                            bound_start = start_boundaries[batch_num].float().data
-                            bound_end = start_boundaries[batch_num].float().data + self.sample_duration - 1
-                            output_boundary = torch.round(output[batch_num, cls, i, :-1] + start_boundaries[batch_num])
-                            if bound_start <= output_boundary[0] <= bound_end and bound_start <= output_boundary[1] <= bound_end:
-                                output[batch_num, cls, i, :-1] = output_boundary
-                            else:
-                                output[batch_num, cls, i, :-1] = torch.zeros(1, 2)
-                            i += 1
-                            if i == self.top_k:
-                                break
-                        pred_num[batch_num, cls] = i
+                # # output = [batch_size, num_classes, num_bars, [start, end, conf]]
+                # pred_num = torch.zeros(batch_size, self.num_classes, dtype=torch.int32)
+                # for batch_num in range(batch_size):
+                #     for cls in range(1, self.num_classes):
+                #         i = 0
+                #         while output[batch_num, cls, i, -1] >= 0.6:
+                #             bound_start = start_boundaries[batch_num].float().data
+                #             bound_end = start_boundaries[batch_num].float().data + self.sample_duration - 1
+                #             output_boundary = torch.round(output[batch_num, cls, i, :-1] + start_boundaries[batch_num])
+                #             if bound_start <= output_boundary[0] <= bound_end and bound_start <= output_boundary[1] <= bound_end:
+                #                 output[batch_num, cls, i, :-1] = output_boundary
+                #             else:
+                #                 output[batch_num, cls, i, :-1] = torch.zeros(1, 2)
+                #             i += 1
+                #             if i == self.top_k:
+                #                 break
+                #         pred_num[batch_num, cls] = i
 
                 total_bars_num = pred_num.int().sum().clone().detach().data
-                frame_pos = torch.zeros(total_bars_num, 2)
-                labels = torch.zeros(total_bars_num, 1)
+                prediction = torch.zeros(total_bars_num, 4)
+                # frame_pos = torch.zeros(total_bars_num, 2).to(device)
+                # labels = torch.zeros(total_bars_num, 1).to(device)
                 num = 0
                 for batch_num in range(batch_size):
                     for cls in range(1, self.num_classes):
-                        result_num = pred_num[batch_num, cls].data
+                        result_num = pred_num[batch_num, cls].item()
                         for i in range(result_num):
-                            bound_start = output[batch_num, cls, i, 0].data
-                            bound_end = output[batch_num, cls, i, 1].data
+                            bound_start = output[batch_num, cls, i, 0]
+                            bound_end = output[batch_num, cls, i, 1]
                             if bound_start == 0 and bound_end == 0:
                                 pass
                             else:
-                                frame_pos[num, :] = output[batch_num, cls, i, :-1].clone().detach()
-                                labels[num, :] = cls
+                                prediction[num, :-1] = output[batch_num, cls, i, :].clone().detach()
+                                prediction[num, -1] = cls
                                 num += 1
-
                 # frame_pos = [bars_num, 2]
                 # labels = [bars_num, 1]
-                out = (frame_pos[:num], labels[:num])
+                # out = (frame_pos[:num], labels[:num])
+                out = prediction[:num]
 
         return out
 
