@@ -15,7 +15,7 @@ from data.test_data_loader import DataSet as test_DataSet
 import time
 import datetime
 
-from lib.utils import AverageMeter, calculate_accuracy, Configure
+from lib.utils import AverageMeter, calculate_accuracy, Configure, nms
 from modules.teacher_student_module import TeacherStudentModule
 from modules.knowledge_distillation_loss import KDloss
 from modules.multiloss import MultiLoss
@@ -174,24 +174,25 @@ def get_result(frame_pos, labels, opt):
                             last_end = final_res[-1][1]
                             last_label = final_res[-1][2]
                             if label == 2 or (label == 1 and train_type == 'cut'):
-                                # 안 겹칠 때
-                                if last_end < start or end < last_start:
-                                    if last_end < start:
-                                        final_res.append((start, end, label))
-                                    else:
-                                        final_res.insert(-1, (start, end, label))
-                                # 겹칠 때
-                                else:
-                                    # last_label=2, label=2
-                                    if last_label == label:
-                                        if last_start <= start <= last_end < end:
-                                            final_res[-1] = (last_start, end, label)
-                                        elif start <= last_start <= end < last_end:
-                                            final_res[-1] = (start, last_end, label)
-                                        elif start <= last_start < last_end <= end:
-                                            final_res[-1] = (start, end, label)
-                                        else:
-                                            final_res[-1] = (last_start, last_end, label)
+                                final_res.append((start, end, label))
+                                # # 안 겹칠 때
+                                # if last_end < start or end < last_start:
+                                #     if last_end < start:
+                                #         final_res.append((start, end, label))
+                                #     else:
+                                #         final_res.insert(-1, (start, end, label))
+                                # # 겹칠 때
+                                # else:
+                                #     # last_label=2, label=2
+                                #     if last_label == label:
+                                #         if last_start <= start <= last_end < end:
+                                #             final_res[-1] = (last_start, end, label)
+                                #         elif start <= last_start <= end < last_end:
+                                #             final_res[-1] = (start, last_end, label)
+                                #         elif start <= last_start < last_end <= end:
+                                #             final_res[-1] = (start, end, label)
+                                #         else:
+                                #             final_res[-1] = (last_start, last_end, label)
                             else:
                                 if last_label == label:
                                     # last_label=1, label=1
@@ -239,6 +240,7 @@ def get_result(frame_pos, labels, opt):
 def test(video_path, test_data_loader, model, device, opt):
     frame_pos = list()
     labels = list()
+    prediction_list = torch.Tensor()
 
     do_origin = False
     if not do_origin:
@@ -262,12 +264,14 @@ def test(video_path, test_data_loader, model, device, opt):
             # 19.8.8. add
             # multiloss 일 때, 처리하는 부분 추가
             if opt.loss_type == 'multiloss':
-                frame_info, label = model(clip, boundary)
+                # frame_info, label = model(clip, boundary)
+                prediction = model(clip, boundary)
 
                 # frame_pos += [[start.item(), end.item()] for start, end in frame_info]
                 # labels += [cls.item() for cls in label]
-                frame_pos += [frame_info.view(-1, 2)]
-                labels += [label.view(-1, 1)]
+                # frame_pos += [frame_info.view(-1, 2)]
+                # labels += [label.view(-1, 1)]
+                prediction_list = torch.cat((prediction_list, prediction), 0)
             else:
                 results = model(clip)
                 frame_pos += [frame.item() for frame in boundary]
@@ -277,18 +281,37 @@ def test(video_path, test_data_loader, model, device, opt):
                 end_time = time.time() - batch_time
                 print("iter {}/{} : {}".format(i + 1, total_iter, end_time), flush=True)
                 batch_time = time.time()
-
         if opt.loss_type == 'multiloss':
-            frame_pos = torch.cat(frame_pos, 0)
-            labels = torch.cat(labels, 0)
             # frame_pos = torch.Tensor(frame_pos).view(-1, 2)
             # labels = torch.Tensor(labels).view(-1, 1)
+            # frame_pos = torch.cat(frame_pos, 0)
+            # labels = torch.cat(labels, 0)
+            all_result = torch.zeros(prediction_list.size(0), 4).to(device)
+            # frame_pos = torch.zeros(prediction_list.size(0), 2).to(device)
+            # labels = torch.zeros(prediction_list.size(0), 1).to(device)
+            start_count = 0
+            end_count = 0
+            if prediction_list.size(0) != 0:
+                for cls in range(1, opt.n_classes):
+                    cls_idx = prediction_list[:, -1] == cls
+                    nms_list = prediction_list[cls_idx]
+                    ids, count = nms(nms_list[:, :2], nms_list[:, -2], overlap=0.33)
+                    end_count += count
+                    all_result[start_count:end_count] = nms_list[ids[:count]]
+                    # frame_pos[start_count:end_count] = nms_list[ids[:count]][:, :2]
+                    # labels[start_count:end_count] = nms_list[ids[:count]][:, -1].unsqueeze(1)
+                    start_count += count
+            # all_result = torch.cat((frame_pos, labels), 1)
+            # _, idx_sort = all_result[:, 0].sort(0)
+            # _, rank = idx_sort.sort(0)
+            # new_result = all_result[rank]
+            # frame_pos, labels = new_result[:, :-1], new_result[:, -1]
 
-            all_result = torch.cat((frame_pos, labels), 1)
-            _, idx_sort = all_result[:, 0].sort(0)
-            _, rank = idx_sort.sort(0)
-            new_result = all_result[rank]
-            frame_pos, labels = new_result[:, :-1], new_result[:, -1]
+            # all_result = torch.cat((frame_pos[:end_count], labels[:end_count]), 1)
+            print(all_result[:end_count])
+            _, idx_sort = all_result[:end_count, 0].sort(0)
+            new_result = all_result[idx_sort]
+            frame_pos, labels = new_result[:, :2], new_result[:, -1]
     else:
         spatial_transforms = get_test_spatial_transform(opt)
         temporal_length = opt.sample_duration
@@ -561,7 +584,7 @@ def test_dataset(opt, device, model):
                     _res['cut'].append((begin, end))
                 else:
                     _res['gradual'].append((begin, end))
-
+        print(_res)
         res[video_name] = _res
         # print(videoname," : ", _res)
 
