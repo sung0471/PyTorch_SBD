@@ -240,7 +240,7 @@ def get_result(frame_pos, labels, opt):
 def test(video_path, test_data_loader, model, device, opt):
     frame_pos = list()
     labels = list()
-    prediction_list = torch.Tensor()
+    prediction_list = torch.Tensor().to(device)
 
     do_origin = False
     if not do_origin:
@@ -530,7 +530,8 @@ def test_dataset(opt, device, model):
     load_checkpoint(model, opt.model)
     # model.eval()
 
-    spatial_transform = get_test_spatial_transform(opt)
+    # spatial_transform = get_test_spatial_transform(opt)
+    spatial_transform = get_train_spatial_transform(opt)
     temporal_transform = None
     target_transform = None
     # list_root_path : train path, only_gradual path
