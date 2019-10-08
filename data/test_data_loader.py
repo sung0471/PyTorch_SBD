@@ -142,6 +142,9 @@ class DataSet(data.Dataset):
         # raw_clip=clip
 
         if self.spatial_transform is not None:
+            # `19.10.8
+            # multiscalecornercrop
+            self.spatial_transform.randomize_parameters()
             clip = [self.spatial_transform(img) for img in clip]
         clip = torch.stack(clip, 0).permute(1, 0, 2, 3)
 
