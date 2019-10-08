@@ -83,9 +83,9 @@ class MultiDetector(nn.Module):
                         if self.data_type in ['cut']:
                             break
                     else:
-                        filter_size = [(4, 1, 1), (2, 1, 1), (2, 1, 1)]
+                        filter_size = [(6, 1, 1), (2, 1, 1), (2, 1, 1)]
                         dilation_size = [1, (3, 1, 1), (7, 1, 1)]
-                        padding_size = [(1, 0, 0), 0, 0]
+                        padding_size = [(2, 0, 0), 0, 0]
                         stride_size = [1, (2, 1, 1), (4, 1, 1)]
                         for filter_idx, _ in enumerate(filter_size):
                             if filter_idx == 0 and self.data_type in ['normal', 'cut']:
