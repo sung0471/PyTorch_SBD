@@ -374,7 +374,7 @@ def detection(out, sample_duration, num_classes, default_bar, conf_thresh, bound
             bound_end = boundaries[batch_num] + sample_duration - 1
             boundary = torch.cat((bound_start.view(-1), bound_end.view(-1)), 0).float()
         else:
-            boundary = torch.Tensor([0, sample_duration - 1]).float()
+            boundary = torch.Tensor([0, sample_duration - 1]).float().to(device)
 
         for cl in range(num_classes):
             c_mask = conf_scores[cl].gt(conf_thresh)  # [default_num]
