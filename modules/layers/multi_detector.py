@@ -8,6 +8,8 @@ class MultiDetector(nn.Module):
                  phase='train', data_type='normal', policy='first', conf_thresh=0.01):
         super(MultiDetector, self).__init__()
 
+        self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+
         self.num_classes = num_classes
         self.extra_layers = extra_layers
         assert phase in ['train', 'test'], 'phase in ["train", "test"]'
@@ -232,7 +234,7 @@ class MultiDetector(nn.Module):
                 #         pred_num[batch_num, cls] = i
 
                 total_bars_num = pred_num.int().sum().clone().detach().data
-                prediction = torch.zeros(total_bars_num, 4)
+                prediction = torch.zeros(total_bars_num, 4).to(self.device)
                 # frame_pos = torch.zeros(total_bars_num, 2).to(device)
                 # labels = torch.zeros(total_bars_num, 1).to(device)
                 num = 0
