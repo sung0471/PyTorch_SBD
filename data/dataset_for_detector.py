@@ -1,16 +1,14 @@
 import os
 import json
 
-make_new_deepSBD = False
-make_dataset_from_groundTruth_and_deepSBD_new = False
-make_dataset_using_deepSBD_new = True
+make_deepSBD_new = False
+make_detector_from_groundTruth_and_deepSBD_new = False
+make_detector_using_deepSBD_new = True
 check_count_of_data_list = True
 
 data_list_root = 'data_list'
-new_deepSBD_name = 'deepSBD_new.txt'
-new_file_name = 'detector.txt'
-new_deepSBD_path = os.path.join(data_list_root, new_deepSBD_name)
-new_dataset_path = os.path.join(data_list_root, new_file_name)
+deepSBD_new_name = 'deepSBD_new.txt'
+detector_name = 'detector.txt'
 
 dataset_root = 'ClipShots'
 video_list_dir = os.path.join(dataset_root, 'video_lists')
@@ -34,13 +32,16 @@ for dir_name in category:
             elif end - start > 1:
                 gt[dir_name][video_name]['gradual'] += [(start, end)]
 
-if make_new_deepSBD:
+deepSBD_path = os.path.join(data_list_root, 'deepSBD.txt')
+deepSBD_new_path = os.path.join(data_list_root, deepSBD_new_name)
+if make_deepSBD_new:
     print('Start making deepSBD_new.txt')
-    deepSBD_path = os.path.join(data_list_root, 'deepSBD.txt')
-    destination = open(new_deepSBD_path, 'at', encoding='utf-8')
+    destination = open(deepSBD_new_path, 'w', encoding='utf-8')
     with open(deepSBD_path, 'rt', encoding='utf-8') as f:
-        total_length = len(f.readlines())
-        for count, line in enumerate(f.readlines()):
+        lines = f.readlines()
+        total_length = len(lines)
+        print('Read {} : {}'.format(deepSBD_path, total_length))
+        for count, line in enumerate(lines):
             words = line.split(' ')
             video_name = words[0]
             start = words[1]
@@ -60,7 +61,8 @@ if make_new_deepSBD:
                 print('processing {}/{} ...'.format(count + 1, total_length))
     print('Finish making deepSBD_new.txt')
 
-if make_dataset_from_groundTruth_and_deepSBD_new:
+new_dataset_path = os.path.join(data_list_root, detector_name)
+if make_detector_from_groundTruth_and_deepSBD_new:
     print('Start making detector dataset from groundTruth and deepSBD new')
     with open(new_dataset_path, 'wt', encoding='utf-8') as f:
         for dir_name, data_list in gt.items():
@@ -88,7 +90,7 @@ if make_dataset_from_groundTruth_and_deepSBD_new:
                                 start_2 += 8
     print('Finish making detector dataset from groundTruth')
 
-    deepSBD_new = new_deepSBD_path
+    deepSBD_new = deepSBD_new_path
     destination = open(new_dataset_path, 'at', encoding='utf-8')
     with open(deepSBD_new, 'rt', encoding='utf-8') as f:
         for line in f.readlines():
@@ -101,10 +103,10 @@ if make_dataset_from_groundTruth_and_deepSBD_new:
                 destination.write('{} {} {} {}'.format(video_name, start, class_type, dir_name))
     print('Finish making detector dataset from deepSBD new')
 
-if make_dataset_using_deepSBD_new:
+if make_detector_using_deepSBD_new:
     print('Start making detector dataset using deepSBD new')
 
-    deepSBD_new = new_deepSBD_path
+    deepSBD_new = deepSBD_new_path
     destination = open(new_dataset_path, 'wt', encoding='utf-8')
     transition_type = ['no', 'gradual', 'cut']
     sample_duration = 16
