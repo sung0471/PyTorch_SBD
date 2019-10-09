@@ -443,10 +443,11 @@ class Configure:
         channel_l = dict()
         channel_l[16] = [(2048, 512, 1024), (1024, 256, 512), (512, 128, 256)]
         channel_l[32] = [(2048, 512, 1024), (1024, 256, 512), (512, 128, 256), (256, 128, 256)]
-        if policy == 'first':
-            self.channel_l = channel_l[sample_duration]
-        else:
-            self.channel_l = channel_l[16]
+        self.channel_l = channel_l[sample_duration]
+        # if policy == 'first':
+        #     self.channel_l = channel_l[sample_duration]
+        # else:
+        #     self.channel_l = channel_l[16]
 
         if policy == 'first':
             default_bar_num_list = dict()
@@ -477,10 +478,16 @@ class Configure:
                     self.default_bar = default_bar_list[sample_duration][cut_length:]
 
         else:
-            new_default_bar_len = [2, 4, 8]
-            new_default_bar_num = [15, 7, 3]
-            step = [1, 2, 4]
-            new_default_bar_list = torch.zeros(25, 2)
+            if sample_duration == 16:
+                new_default_bar_len = [2, 4, 8]
+                new_default_bar_num = [15, 7, 3]
+                step = [1, 2, 4]
+                new_default_bar_list = torch.zeros(25, 2)
+            else:
+                new_default_bar_len = [2, 4, 8, 16]
+                new_default_bar_num = [31, 15, 7, 3]
+                step = [1, 2, 4, 8]
+                new_default_bar_list = torch.zeros(56, 2)
             count = 0
             for idx, length in enumerate(new_default_bar_len):
                 for i in range(new_default_bar_num[idx]):
