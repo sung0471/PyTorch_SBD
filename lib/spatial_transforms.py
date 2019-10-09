@@ -337,7 +337,7 @@ def get_train_spatial_transform(opt):
                                          ToTensor(opt.norm_value),
                                          Normalize(get_mean(opt.norm_value), [1, 1, 1])])
     else:
-        return Compose([CornerCrop(opt.scales, opt.sample_size),
+        return Compose([CornerCrop(opt.sample_size),
                                          RandomHorizontalFlip(),
                                          ToTensor(opt.norm_value),
                                          Normalize(get_mean(opt.norm_value), [1, 1, 1])])
@@ -349,7 +349,7 @@ def get_test_spatial_transform(opt):
                         ToTensor(opt.norm_value),
                         Normalize(get_mean(opt.norm_value), [1, 1, 1])])
     else:
-        return Compose([CornerCrop(opt.scales, opt.sample_size),
+        return Compose([CornerCrop(opt.sample_size),
                                          RandomHorizontalFlip(),
                                          ToTensor(opt.norm_value),
                                          Normalize(get_mean(opt.norm_value), [1, 1, 1])])
