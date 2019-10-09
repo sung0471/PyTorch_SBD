@@ -530,8 +530,7 @@ def test_dataset(opt, device, model):
     load_checkpoint(model, opt.model)
     # model.eval()
 
-    # spatial_transform = get_test_spatial_transform(opt)
-    spatial_transform = get_train_spatial_transform(opt)
+    spatial_transform = get_test_spatial_transform(opt)
     temporal_transform = None
     target_transform = None
     # list_root_path : train path, only_gradual path
@@ -770,14 +769,14 @@ def get_lastest_model(opt):
 def train_dataset(opt, device, model):
     # opt = parse_opts()
 
-    opt.scales = [opt.initial_scale]
-    for i in range(1, opt.n_scales):
-        opt.scales.append(opt.scales[-1] * opt.scale_step)
-
-    opt.mean = get_mean(opt.norm_value)
-    print(opt)
-
-    torch.manual_seed(opt.manual_seed)
+    # opt.scales = [opt.initial_scale]
+    # for i in range(1, opt.n_scales):
+    #     opt.scales.append(opt.scales[-1] * opt.scale_step)
+    #
+    # opt.mean = get_mean(opt.norm_value)
+    # print(opt)
+    #
+    # torch.manual_seed(opt.manual_seed)
 
     # # 19.3.8. add
     # print("cuda is available : ", torch.cuda.is_available(), flush=True)
@@ -943,6 +942,16 @@ def main():
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
     opt = parse_opts()
+
+    # `19.10.8 move from train_dataset()
+    opt.scales = [opt.initial_scale]
+    for i in range(1, opt.n_scales):
+        opt.scales.append(opt.scales[-1] * opt.scale_step)
+
+    opt.mean = get_mean(opt.norm_value)
+    print(opt)
+
+    torch.manual_seed(opt.manual_seed)
 
     # 19.3.8. add
     print("cuda is available : ", torch.cuda.is_available(), flush=True)
