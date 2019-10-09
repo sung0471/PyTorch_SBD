@@ -325,16 +325,31 @@ class MultiScaleCornerCrop(object):
         self.scale = self.scales[random.randint(0, len(self.scales) - 1)]
         self.crop_position = self.crop_positions[random.randint(0, len(self.scales) - 1)]
 
+
 def get_mean(norm_value=255):
     return [114.7748 / norm_value, 107.7354 / norm_value, 99.4750 / norm_value]
 
+
 def get_train_spatial_transform(opt):
-    return Compose([MultiScaleCornerCrop(opt.scales, opt.sample_size),
-                                     RandomHorizontalFlip(),
-                                     ToTensor(opt.norm_value),
-                                     Normalize(get_mean(opt.norm_value), [1, 1, 1])])
+    if opt.train_data_type == 'cut':
+        return Compose([MultiScaleCornerCrop(opt.scales, opt.sample_size),
+                                         RandomHorizontalFlip(),
+                                         ToTensor(opt.norm_value),
+                                         Normalize(get_mean(opt.norm_value), [1, 1, 1])])
+    else:
+        return Compose([CornerCrop(opt.scales, opt.sample_size),
+                                         RandomHorizontalFlip(),
+                                         ToTensor(opt.norm_value),
+                                         Normalize(get_mean(opt.norm_value), [1, 1, 1])])
+
 
 def get_test_spatial_transform(opt):
-    return Compose([Scale((opt.sample_size, opt.sample_size)),
-                    ToTensor(opt.norm_value),
-                    Normalize(get_mean(opt.norm_value), [1, 1, 1])])
+    if opt.train_data_type == 'cut':
+        return Compose([Scale((opt.sample_size, opt.sample_size)),
+                        ToTensor(opt.norm_value),
+                        Normalize(get_mean(opt.norm_value), [1, 1, 1])])
+    else:
+        return Compose([CornerCrop(opt.scales, opt.sample_size),
+                                         RandomHorizontalFlip(),
+                                         ToTensor(opt.norm_value),
+                                         Normalize(get_mean(opt.norm_value), [1, 1, 1])])
