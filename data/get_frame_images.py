@@ -162,7 +162,7 @@ def get_images(path_type, video_name_list, gts):
 
 if __name__ == '__main__':
     path_type = ['train', 'only_gradual', 'test', 'result']
-    check_dataset = [False, False, False, True]
+    check_dataset = [False, False, False, False]
     dataloader_name = ['deepSBD', 'detector', 'detector_new']
     check_dataloader = [False, False, False]
 
@@ -171,3 +171,13 @@ if __name__ == '__main__':
         get_images(path_type, video_name_list, gts)
     elif True in check_dataloader:
         get_gt_dirs(path_type, check_dataloader, dataloader_name)
+
+    video_to_frame = True
+    if video_to_frame:
+        video_name = ['9MMTTdr-tbI.mp4']
+        video_name_list = {'test': video_name}
+        gt_path = os.path.join('ClipShots', 'annotations', 'test.json')
+        # gt_path = os.path.join('../results/_draw/', 'results.json')
+        gt = json.load(open(gt_path, 'rt'))
+        gts = {'test': gt}
+        get_images(['test'], video_name_list, gts)
