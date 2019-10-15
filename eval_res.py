@@ -66,14 +66,15 @@ def eval(result_dir, gt_path, train_data_type):
     fp = dict()
     fn = dict()
     tp_fp_fn_list = dict()
-    for videoname, labels in gts.items():
-        if videoname in predicts:
+    # for videoname, labels in gts.items():
+    for videoname, _predicts in predicts.items():
+        if videoname in gts:
             _gts = gts[videoname]['transitions']
             gt['cut'] = [(begin, end) for begin, end in _gts if end - begin == 1]
             gt['gradual'] = [(begin, end) for begin, end in _gts if end - begin > 1]
             gt['all'] = gt['cut'] + gt['gradual']
 
-            _predicts = predicts[videoname]
+            # _predicts = predicts[videoname]
             tp_fp_fn_list[videoname] = dict()
             for type in transition_type:
                 predict[type] = _predicts[type]
@@ -120,7 +121,7 @@ def eval(result_dir, gt_path, train_data_type):
                                                 'gt_len': gt_len[type], 'pred_len': pred_len[type],
                                                 'precision': precision, 'recall': recall, 'f1_score': f1}
         else:
-            print("{} not found".format(videoname))
+            print("{} not found in Ground Truth".format(videoname))
             raise Exception()
 
     tp_tn_fp_fn_path = os.path.join(result_dir, 'tp_tn_fp_fn.json')
