@@ -238,7 +238,8 @@ if __name__ == '__main__':
     check_train_dataset = False
     check_test_dataset = False
     check_data_set = False
-    check_gt_transition_min_max = True
+    check_gt_transition_min_max = False
+    dataset_category_check = True
 
     if check_data_list:
         check_data_list_function(video_list_path, dataset_type_list)
@@ -264,3 +265,19 @@ if __name__ == '__main__':
 
     if check_gt_transition_min_max:
         check_gt_transition_min_max_function(gts)
+
+    if dataset_category_check:
+        l = list()
+        test_dataset_list = ['board', 'draw', 'etc+religion', 'living_things', 'marine_activity', 'performance', 'playing', 'sport', 'vehicle']
+        for file_name in test_dataset_list:
+            txt_path = os.path.join(video_list_root, 'test_' + file_name + '.txt')
+            with open(txt_path, 'r') as f:
+                l += [line.strip('\n') for line in f.readlines()]
+        txt_path = os.path.join(video_list_root, 'test.txt')
+        rest = list()
+        with open(txt_path, 'r') as f:
+            total = [line.strip('\n') for line in f.readlines()]
+            for name in total:
+                if name not in l:
+                    rest += [name]
+        print(rest)
