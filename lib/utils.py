@@ -459,67 +459,55 @@ class Configure:
         #     self.channel_l = channel_l[16]
 
         if policy == 'first':
-            default_bar_num_list = dict()
-            default_bar_num_list[8] = [7, 3, 1]
-            default_bar_num_list[16] = [15, 7, 3, 1]
-            default_bar_num_list[32] = [31, 15, 7, 3, 1]
-            default_bar_list = dict()
-            default_bar_list[8] = torch.zeros(11, 2)
-            default_bar_list[16] = torch.zeros(26, 2)
-            default_bar_list[32] = torch.zeros(57, 2)
-
-            for input_length in default_bar_num_list.keys():
-                count = 0
-                length = 2
-                for default_bar_num in default_bar_num_list[input_length]:
-                    for step in range(default_bar_num):
-                        start = step * (length / 2)
-                        end = step * (length / 2) + length - 1
-                        default_bar_list[input_length][count, :] = torch.Tensor([start, end])
-                        count += 1
-                    length *= 2
-
-            if data_type == 'normal':
-                self.default_bar = default_bar_list[sample_duration]
+            if sample_duration == 8:
+                default_bar_len = [2, 4, 8]
+                default_bar_num = [7, 3, 1]
+                default_bar_list = torch.zeros(11, 2)
+            elif sample_duration == 16:
+                default_bar_len = [2, 4, 8, 16]
+                default_bar_num = [15, 7, 3, 1]
+                default_bar_list = torch.zeros(26, 2)
             else:
-                cut_length = default_bar_num_list[sample_duration][0]
-                if data_type == 'cut':
-                    self.default_bar = default_bar_list[sample_duration][:cut_length]
-                else:
-                    self.default_bar = default_bar_list[sample_duration][cut_length:]
+                default_bar_len = [2, 4, 8, 16, 32]
+                default_bar_num = [31, 15, 7, 3, 1]
+                default_bar_list = torch.zeros(57, 2)
+            step = [1, 2, 4, 8, 16]
 
         else:
             if sample_duration == 8:
-                new_default_bar_len = [4]
-                new_default_bar_num = [5]
-                step = [1]
-                new_default_bar_list = torch.zeros(5, 2)
+                default_bar_len = [2, 4]
+                default_bar_num = [7, 3]
+                default_bar_list = torch.zeros(5, 2)
             elif sample_duration == 16:
-                new_default_bar_len = [2, 4, 8]
-                new_default_bar_num = [15, 7, 3]
-                step = [1, 2, 4]
-                new_default_bar_list = torch.zeros(25, 2)
+                default_bar_len = [2, 4, 8]
+                default_bar_num = [15, 7, 3]
+                default_bar_list = torch.zeros(25, 2)
             else:
-                new_default_bar_len = [2, 4, 8, 16]
-                new_default_bar_num = [31, 15, 7, 3]
-                step = [1, 2, 4, 8]
-                new_default_bar_list = torch.zeros(56, 2)
-            count = 0
-            for idx, length in enumerate(new_default_bar_len):
-                for i in range(new_default_bar_num[idx]):
-                    start = step[idx] * i
-                    end = step[idx] * i + length - 1
-                    new_default_bar_list[count, :] = torch.Tensor([start, end])
-                    count += 1
+                default_bar_len = [2, 4, 8, 16]
+                default_bar_num = [31, 15, 7, 3]
+                default_bar_list = torch.zeros(56, 2)
+            step = [1, 2, 4, 8]
 
-            if data_type == 'normal':
-                self.default_bar = new_default_bar_list
+        count = 0
+        for idx, length in enumerate(default_bar_len):
+            for i in range(default_bar_num[idx]):
+                start = step[idx] * i
+                end = step[idx] * i + length - 1
+                default_bar_list[count, :] = torch.Tensor([start, end])
+                count += 1
+
+        if data_type == 'normal':
+            self.default_bar = default_bar_list
+        else:
+            cut_length = default_bar_num[0]
+            if data_type == 'cut':
+                self.default_bar = default_bar_list[:cut_length]
             else:
-                cut_length = new_default_bar_num[0]
-                if data_type == 'cut':
-                    self.default_bar = new_default_bar_list[:cut_length]
-                else:
-                    self.default_bar = new_default_bar_list[cut_length:]
+                self.default_bar = default_bar_list[cut_length:]
+
+        self.default_bar_len = default_bar_len
+        self.default_bar_num = default_bar_num
+        self.step = step
 
     def get_channel_list(self):
         return self.channel_l
