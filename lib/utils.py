@@ -433,16 +433,25 @@ def detection(out, sample_duration, num_classes, default_bar, conf_thresh, bound
 
 
 class Configure:
-    def __init__(self, sample_duration=16, data_type='normal', policy='first'):
-        assert sample_duration in [16, 32]
+    def __init__(self, in_channel=2048, sample_duration=16, data_type='normal', policy='first'):
+        assert sample_duration in [8, 16, 32]
         assert policy in ['first', 'second']
         self.sample_duration = sample_duration
         self.data_type = data_type
         self.policy = policy
 
         channel_l = dict()
-        channel_l[16] = [(2048, 512, 1024), (1024, 256, 512), (512, 128, 256)]
-        channel_l[32] = [(2048, 512, 1024), (1024, 256, 512), (512, 128, 256), (256, 128, 256)]
+        # channel_l[8] = [(2048, 512, 1024), (1024, 256, 512)]
+        # channel_l[16] = [(2048, 512, 1024), (1024, 256, 512), (512, 128, 256)]
+        # channel_l[32] = [(2048, 512, 1024), (1024, 256, 512), (512, 128, 256), (256, 128, 256)]
+        if sample_duration not in channel_l.keys():
+            channel_l[sample_duration] = list()
+        for i in range(int(sample_duration / 4)):
+            if in_channel == 256:
+                channel_l[sample_duration].append((in_channel, int(in_channel / 2), in_channel))
+            else:
+                channel_l[sample_duration].append((in_channel, int(in_channel / 4), int(in_channel / 2)))
+            in_channel = int(in_channel / 2)
         self.channel_l = channel_l[sample_duration]
         # if policy == 'first':
         #     self.channel_l = channel_l[sample_duration]
@@ -451,9 +460,11 @@ class Configure:
 
         if policy == 'first':
             default_bar_num_list = dict()
+            default_bar_num_list[8] = [7, 3, 1]
             default_bar_num_list[16] = [15, 7, 3, 1]
             default_bar_num_list[32] = [31, 15, 7, 3, 1]
             default_bar_list = dict()
+            default_bar_list[8] = torch.zeros(11, 2)
             default_bar_list[16] = torch.zeros(26, 2)
             default_bar_list[32] = torch.zeros(57, 2)
 
@@ -478,7 +489,12 @@ class Configure:
                     self.default_bar = default_bar_list[sample_duration][cut_length:]
 
         else:
-            if sample_duration == 16:
+            if sample_duration == 8:
+                new_default_bar_len = [4]
+                new_default_bar_num = [5]
+                step = [1]
+                new_default_bar_list = torch.zeros(5, 2)
+            elif sample_duration == 16:
                 new_default_bar_len = [2, 4, 8]
                 new_default_bar_num = [15, 7, 3]
                 step = [1, 2, 4]
