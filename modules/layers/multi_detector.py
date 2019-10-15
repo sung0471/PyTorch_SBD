@@ -19,11 +19,11 @@ class MultiDetector(nn.Module):
         self.sample_duration = kernel_size[0]
         self.policy = policy
         assert self.policy in ['first', 'second']
-        c = Configure(sample_duration=self.sample_duration, data_type=data_type, policy=self.policy)
+        in_channel = in_planes * block.expansion
+        c = Configure(in_channel=in_channel, sample_duration=self.sample_duration, data_type=data_type, policy=self.policy)
         channel_list = c.get_channel_list()
         self.default_bar = c.get_default_bar()
 
-        in_channel = in_planes * block.expansion
         if not self.extra_layers:
             self.loc_pool = nn.AvgPool3d(kernel_size, stride=1)
             self.loc_fc = nn.Linear(in_channel, 2)
