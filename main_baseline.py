@@ -16,13 +16,13 @@ import time
 import datetime
 
 from lib.utils import AverageMeter, calculate_accuracy, Configure, nms
+from lib.pickle_utils import PickleUtils
 from modules.teacher_student_module import TeacherStudentModule
 from modules.knowledge_distillation_loss import KDloss
 from modules.multiloss import MultiLoss
 from model_cls import build_model
 
 import cv2
-import pickle
 from tensorboardX import SummaryWriter
 import eval_res
 
@@ -37,9 +37,10 @@ def get_label(res_tensor):
     # for row in res_numpy:
     #     labels.append(np.argmax(row))
     res = torch.argmax(res_tensor, dim=1, keepdim=True)
-    labels = [label.item() for label in res]
+    # labels = [label.item() for label in res]
 
-    return labels
+    return res
+    # return labels
 
 
 def get_labels_from_candidate(video, temporal_length, model, spatial_transform, batch_size, device, boundary_index, **args):
@@ -237,117 +238,95 @@ def get_result(frame_pos, labels, opt):
     return final_res
 
 
-def test(video_path, test_data_loader, model, device, opt):
-    frame_pos = list()
-    labels = list()
-    prediction_list = torch.Tensor().to(device)
+def get_frames_labels(prediction_list, opt):
+    if opt.loss_type == 'multiloss':
+        all_result = torch.zeros(prediction_list.size(0), 4).to(opt.device)
+        start_count = 0
+        end_count = 0
+        if prediction_list.size(0) != 0:
+            for cls in range(1, opt.n_classes):
+                cls_idx = prediction_list[:, -1] == cls
+                nms_list = prediction_list[cls_idx]
+                ids, count = nms(nms_list[:, :2], nms_list[:, -2], overlap=0.5)
+                end_count += count
+                all_result[start_count:end_count] = nms_list[ids[:count]]
+                start_count += count
 
-    do_origin = False
-    if not do_origin:
-        batch_time = time.time()
-        total_iter = len(test_data_loader)
-        for i, (clip, boundary) in enumerate(test_data_loader):
-            # for check size
-            # print(sys.getsizeof(inputs))
-
-            # clip = Variable(clip)
-            # if opt.cuda:
-            #     # clip = clip.to(device)
-            #     clip = clip.cuda(device, non_blocking=True)
-            with torch.no_grad():
-                clip = clip.to(device, non_blocking=True)
-                boundary = boundary.to(device, non_blocking=True)
-            # # if use teacher student network, only get result of student network output
-            # if opt.loss_type == 'KDloss':
-            #     results = results[1]
-
-            # 19.8.8. add
-            # multiloss 일 때, 처리하는 부분 추가
-            if opt.loss_type == 'multiloss':
-                # frame_info, label = model(clip, boundary)
-                prediction = model(clip, boundary)
-
-                # frame_pos += [[start.item(), end.item()] for start, end in frame_info]
-                # labels += [cls.item() for cls in label]
-                # frame_pos += [frame_info.view(-1, 2)]
-                # labels += [label.view(-1, 1)]
-                prediction_list = torch.cat((prediction_list, prediction), 0)
-            else:
-                results = model(clip)
-                frame_pos += [frame.item() for frame in boundary]
-                labels += get_label(results)
-
-            if (i+1) % 10 == 0 or i+1 == total_iter:
-                end_time = time.time() - batch_time
-                print("iter {}/{} : {}".format(i + 1, total_iter, end_time), flush=True)
-                batch_time = time.time()
-        if opt.loss_type == 'multiloss':
-            # frame_pos = torch.Tensor(frame_pos).view(-1, 2)
-            # labels = torch.Tensor(labels).view(-1, 1)
-            # frame_pos = torch.cat(frame_pos, 0)
-            # labels = torch.cat(labels, 0)
-            all_result = torch.zeros(prediction_list.size(0), 4).to(device)
-            # frame_pos = torch.zeros(prediction_list.size(0), 2).to(device)
-            # labels = torch.zeros(prediction_list.size(0), 1).to(device)
-            start_count = 0
-            end_count = 0
-            if prediction_list.size(0) != 0:
-                for cls in range(1, opt.n_classes):
-                    cls_idx = prediction_list[:, -1] == cls
-                    nms_list = prediction_list[cls_idx]
-                    ids, count = nms(nms_list[:, :2], nms_list[:, -2], overlap=0.33)
-                    end_count += count
-                    all_result[start_count:end_count] = nms_list[ids[:count]]
-                    # frame_pos[start_count:end_count] = nms_list[ids[:count]][:, :2]
-                    # labels[start_count:end_count] = nms_list[ids[:count]][:, -1].unsqueeze(1)
-                    start_count += count
-            # all_result = torch.cat((frame_pos, labels), 1)
-            # _, idx_sort = all_result[:, 0].sort(0)
-            # _, rank = idx_sort.sort(0)
-            # new_result = all_result[rank]
-            # frame_pos, labels = new_result[:, :-1], new_result[:, -1]
-
-            # all_result = torch.cat((frame_pos[:end_count], labels[:end_count]), 1)
-            print(all_result[:end_count])
-            _, idx_sort = all_result[:end_count, 0].sort(0)
-            new_result = all_result[idx_sort]
-            frame_pos, labels = new_result[:, :2], new_result[:, -1]
+        print(all_result[:end_count])
+        _, idx_sort = all_result[:end_count, 0].sort(0)
+        new_result = all_result[idx_sort]
+        frame_pos, labels = new_result[:, :2], new_result[:, -1]
     else:
-        spatial_transforms = get_test_spatial_transform(opt)
-        temporal_length = opt.sample_duration
-
-        assert (os.path.exists(video_path))
-        videocap = cv2.VideoCapture(video_path)
-        status = True
-        clip_batch = []
-        labels = []
-        image_clip = []
-        while status:
-            for i in range(temporal_length - len(image_clip)):
-                status, frame = videocap.read()
-                if not status:
-                    break
-                else:
-                    frame = Image.fromarray(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)).convert('RGB')
-                    frame = spatial_transforms(frame)
-                    image_clip.append(frame)
-
-            image_clip += [image_clip[-1] for _ in range(temporal_length - len(image_clip))]
-
-            if len(image_clip) == temporal_length:
-                clip = torch.stack(image_clip, 0).permute(1, 0, 2, 3)
-                clip_batch.append(clip)
-                image_clip = image_clip[int(temporal_length / 2):]
-
-            if len(clip_batch) == opt.batch_size or not status:
-                clip_tensor = torch.stack(clip_batch, 0)
-                clip_tensor = clip_tensor.cuda(device, non_blocking=True)
-                clip_tensor = Variable(clip_tensor)
-                results = model(clip_tensor)
-                labels += get_label(results)
-                clip_batch = []
+        frame_pos, labels = prediction_list[:, 0], prediction_list[:, 1]
 
     return frame_pos, labels
+
+
+def test(video_path, test_data_loader, model, opt):
+    # frame_pos = list()
+    # labels = list()
+    prediction_list = torch.Tensor().to(opt.device)
+
+    batch_time = time.time()
+    total_iter = len(test_data_loader)
+    for i, (clip, boundary) in enumerate(test_data_loader):
+        # for check size
+        # print(sys.getsizeof(inputs))
+
+        # clip = Variable(clip)
+        # if opt.cuda:
+        #     # clip = clip.to(device)
+        #     clip = clip.cuda(device, non_blocking=True)
+        with torch.no_grad():
+            clip = clip.to(opt.device, non_blocking=True)
+            boundary = boundary.to(opt.device, non_blocking=True)
+        # # if use teacher student network, only get result of student network output
+        # if opt.loss_type == 'KDloss':
+        #     results = results[1]
+
+        # 19.8.8. add
+        # multiloss 일 때, 처리하는 부분 추가
+        if opt.loss_type == 'multiloss':
+            # frame_info, label = model(clip, boundary)
+            prediction = model(clip, boundary)
+
+            # frame_pos += [[start.item(), end.item()] for start, end in frame_info]
+            # labels += [cls.item() for cls in label]
+            # frame_pos += [frame_info.view(-1, 2)]
+            # labels += [label.view(-1, 1)]
+            prediction_list = torch.cat((prediction_list, prediction), 0)
+        else:
+            results = model(clip)
+            # frame_pos += [frame.item() for frame in boundary]
+            # labels += get_label(results)
+            prediction = torch.cat((boundary.view(-1, 1), get_label(results).view(-1, 1)), 1)
+            prediction_list = torch.cat((prediction_list, prediction), 0)
+
+        if (i+1) % 10 == 0 or i+1 == total_iter:
+            end_time = time.time() - batch_time
+            print("iter {}/{} : {}".format(i + 1, total_iter, end_time), flush=True)
+            batch_time = time.time()
+
+    # if opt.loss_type == 'multiloss':
+    #     all_result = torch.zeros(prediction_list.size(0), 4).to(opt.device)
+    #     start_count = 0
+    #     end_count = 0
+    #     if prediction_list.size(0) != 0:
+    #         for cls in range(1, opt.n_classes):
+    #             cls_idx = prediction_list[:, -1] == cls
+    #             nms_list = prediction_list[cls_idx]
+    #             ids, count = nms(nms_list[:, :2], nms_list[:, -2], overlap=0.33)
+    #             end_count += count
+    #             all_result[start_count:end_count] = nms_list[ids[:count]]
+    #             start_count += count
+    #
+    #     print(all_result[:end_count])
+    #     _, idx_sort = all_result[:end_count, 0].sort(0)
+    #     new_result = all_result[idx_sort]
+    #     frame_pos, labels = new_result[:, :2], new_result[:, -1]
+
+    # return [frame_pos, labels]
+    return prediction_list
 
 
 def load_checkpoint(model, opt_model):
@@ -358,53 +337,7 @@ def load_checkpoint(model, opt_model):
     model.load_state_dict(checkpoint['state_dict'])
 
 
-def get_pickle_dir(root_dir, opt):
-    model = 'KD' if opt.loss_type == 'KDloss' else opt.model
-    KD_type = '{}+{}'.format(opt.model, opt.teacher_model) if opt.loss_type == 'KDloss' else None
-    is_pretrained = 'pretrained' if opt.pretrained_model else 'no_pretrained'
-    epoch = 'epoch_' + str(opt.epoch)
-
-    model_dir = os.path.join(root_dir, model)
-    if KD_type is not None:
-        model_dir = os.path.join(model_dir, KD_type)
-    pretrained_dir = os.path.join(model_dir, is_pretrained)
-    pickle_dir = os.path.join(pretrained_dir, epoch)
-
-    if not os.path.exists(pickle_dir):
-        os.makedirs(pickle_dir)
-
-    # if not os.path.exists(root_dir):
-    #     os.mkdir(root_dir)
-    # model_dir = os.path.join(root_dir, model)
-    # if not os.path.exists(model_dir):
-    #     os.mkdir(model_dir)
-    # pretrained_dir = os.path.join(root_dir, model, is_pretrained)
-    # if not os.path.exists(pretrained_dir):
-    #     os.mkdir(pretrained_dir)
-    # pickle_dir = os.path.join(root_dir, model, is_pretrained, epoch)
-    # if not os.path.exists(pickle_dir):
-    #     os.mkdir(pickle_dir)
-
-    return pickle_dir
-
-
-def save_pickle(frame_pos_path, labels_path, frame_pos, labels):
-    with open(frame_pos_path, 'wb') as f:
-        pickle.dump(frame_pos, f)
-    with open(labels_path, 'wb') as f:
-        pickle.dump(labels, f)
-
-
-def load_pickle(frame_pos_path, labels_path):
-    with open(frame_pos_path, 'rb') as f:
-        frame_pos = pickle.load(f)
-    with open(labels_path, 'rb') as f:
-        labels = pickle.load(f)
-
-    return frame_pos, labels
-
-
-def test_misaeng(opt, device, model):
+def test_misaeng(opt, model):
     # opt = parse_opts()
 
     # if opt.loss_type == 'KDloss':
@@ -426,9 +359,9 @@ def test_misaeng(opt, device, model):
     with open(misaeng_list_path, 'r') as f:
         video_name_list = [line.strip('\n') for line in f.readlines()]
 
-    pickle_root_dir = os.path.join(opt.result_dir, 'test_pickle')
-    pickle_dir = get_pickle_dir(pickle_root_dir, opt)
-    is_full_data = '.full' if opt.is_full_data else '.no_full'
+    # data_name_list = ['frame_pos', 'labels']
+    data_name_list = ['predictions']
+    pickle_utils = PickleUtils(opt, video_name_list, data_name_list)
 
     res = {}
     # print('\n====> Testing Start', flush=True)
@@ -450,15 +383,17 @@ def test_misaeng(opt, device, model):
 
         # 이미 처리한 결과가 있다면 pickle 로드
         print("Process {}".format(idx + 1), flush=True)
-        frame_pos_path = os.path.join(pickle_dir, video_name + is_full_data + '.frame_pos')
-        labels_path = os.path.join(pickle_dir, video_name + is_full_data + '.labels')
-        if not os.path.exists(frame_pos_path) and not os.path.exists(labels_path):
+        if pickle_utils.check_pickle_data(video_name):
             video_path = os.path.join(root_dir, video_name)
-            frame_pos, labels = test(video_path, test_data_loader, model, device, opt)
-            save_pickle(frame_pos_path, labels_path, frame_pos, labels)
+            # frame_pos, labels = test(video_path, test_data_loader, model, device, opt)
+            predictions = [test(video_path, test_data_loader, model, opt)]
+            pickle_utils.save_pickle(video_name, predictions)
         else:
-            frame_pos, labels = load_pickle(frame_pos_path, labels_path)
+            # frame_pos, labels = load_pickle(frame_pos_path, labels_path)
+            predictions = pickle_utils.load_pickle(video_name)
 
+        # final_res = get_result(frame_pos, labels, opt)
+        frame_pos, labels = get_frames_labels(predictions[0], opt)
         final_res = get_result(frame_pos, labels, opt)
         # print(final_res)
 
@@ -519,7 +454,7 @@ def test_misaeng(opt, device, model):
         json.dump(res, open(out_path, 'w'))
 
 
-def test_dataset(opt, device, model):
+def test_dataset(opt, model):
     # opt = parse_opts()
 
     # if opt.loss_type == 'KDloss':
@@ -541,9 +476,9 @@ def test_dataset(opt, device, model):
     with open(opt.test_list_path, 'r') as f:
         video_name_list = [line.strip('\n') for line in f.readlines()]
 
-    pickle_root_dir = os.path.join(opt.result_dir, 'test_pickle')
-    pickle_dir = get_pickle_dir(pickle_root_dir, opt)
-    is_full_data = '.full' if opt.is_full_data else '.no_full'
+    # data_name_list = ['frame_pos', 'labels']
+    data_name_list = ['predictions']
+    pickle_utils = PickleUtils(opt, video_name_list, data_name_list)
 
     res = {}
     # print('\n====> Testing Start', flush=True)
@@ -559,15 +494,17 @@ def test_dataset(opt, device, model):
                                  input_type=opt.input_type, candidate=opt.candidate)
         test_data_loader = torch.utils.data.DataLoader(test_data, batch_size=opt.batch_size,
                                                        num_workers=opt.n_threads, pin_memory=True)
-        frame_pos_path = os.path.join(pickle_dir, video_name + is_full_data + '.frame_pos')
-        labels_path = os.path.join(pickle_dir, video_name + is_full_data + '.labels')
-        if not os.path.exists(frame_pos_path) and not os.path.exists(labels_path):
+        if pickle_utils.check_pickle_data(video_name):
             video_path = os.path.join(root_dir, video_name)
-            frame_pos, labels = test(video_path, test_data_loader, model, device, opt)
-            save_pickle(frame_pos_path, labels_path, frame_pos, labels)
+            # frame_pos, labels = test(video_path, test_data_loader, model, device, opt)
+            predictions = [test(video_path, test_data_loader, model, opt)]
+            pickle_utils.save_pickle(video_name, predictions)
         else:
-            frame_pos, labels = load_pickle(frame_pos_path, labels_path)
+            # frame_pos, labels = load_pickle(frame_pos_path, labels_path)
+            predictions = pickle_utils.load_pickle(video_name)
 
+        # final_res = get_result(frame_pos, labels, opt)
+        frame_pos, labels = get_frames_labels(predictions[0], opt)
         final_res = get_result(frame_pos, labels, opt)
         # print(final_res)
 
@@ -602,7 +539,7 @@ def test_dataset(opt, device, model):
 
 # 19.3.8 revision
 # add parameter : "device"
-def train(cur_iter, iter_per_epoch, epoch, data_loader, model, criterion, optimizer, scheduler, opt, device):
+def train(cur_iter, iter_per_epoch, epoch, data_loader, model, criterion, optimizer, scheduler, opt):
     # 19.3.14. add
     # print("device : ", torch.cuda.get_device_name(0), flush=True)
     # torch.set_default_tensor_type('torch.cuda.DoubleTensor')
@@ -659,9 +596,9 @@ def train(cur_iter, iter_per_epoch, epoch, data_loader, model, criterion, optimi
             # .cuda > .to
             # with torch.no_grad() for target
             # remove 'if opt.cuda:'
-            inputs = inputs.to(device, non_blocking=True)
+            inputs = inputs.to(opt.device, non_blocking=True)
             with torch.no_grad():
-                targets = targets.to(device, non_blocking=True)
+                targets = targets.to(opt.device, non_blocking=True)
 
             # 19.7.16. no use
             # targets = Variable(targets)
@@ -679,7 +616,7 @@ def train(cur_iter, iter_per_epoch, epoch, data_loader, model, criterion, optimi
             if opt.loss_type in ['KDloss']:
                 outputs = outputs[1]
 
-            acc = calculate_accuracy(outputs, targets, opt.sample_duration, default, device)
+            acc = calculate_accuracy(outputs, targets, opt.sample_duration, default, opt.device)
             for key in keys:
                 avg_acc[key] += acc[key] / 10
                 epoch_acc[key] += acc[key] / iter_per_epoch
@@ -766,7 +703,7 @@ def get_lastest_model(opt):
     return iter_num
 
 
-def train_dataset(opt, device, model):
+def train_dataset(opt, model):
     # opt = parse_opts()
 
     # opt.scales = [opt.initial_scale]
@@ -849,7 +786,7 @@ def train_dataset(opt, device, model):
     if opt.loss_type == 'KDloss':
         criterion = KDloss(loss_type=opt.KD_type)
     elif opt.loss_type == 'multiloss':
-        criterion = MultiLoss(device=device, extra_layers=opt.use_extra_layer,
+        criterion = MultiLoss(device=opt.device, extra_layers=opt.use_extra_layer,
                               sample_duration=opt.sample_duration, num_classes=opt.n_classes,
                               data_type=opt.train_data_type, policy=opt.layer_policy, neg_ratio=3, neg_threshold=opt.neg_threshold)
     else:
@@ -860,7 +797,7 @@ def train_dataset(opt, device, model):
     # 19.7.16. revision
     # remove 'if opt.cuda:
     # if opt.cuda:
-    criterion = criterion.to(device)
+    criterion = criterion.to(opt.device)
 
     if opt.train:
         spatial_transform = get_train_spatial_transform(opt)
@@ -890,10 +827,10 @@ def train_dataset(opt, device, model):
 
         # 19.3.8. add
         # train(cur_iter,opt.total_iter,training_data_loader, model, criterion, optimizer,scheduler,opt)
-        train(cur_iter, opt.iter_per_epoch, opt.epoch, training_data_loader, model, criterion, optimizer, scheduler, opt, device)
+        train(cur_iter, opt.iter_per_epoch, opt.epoch, training_data_loader, model, criterion, optimizer, scheduler, opt)
 
 
-def build_final_model(opt, device):
+def build_final_model(opt):
     assert opt.phase in ['train', 'test']
     # 19.6.4 remove
     # is not used
@@ -909,9 +846,9 @@ def build_final_model(opt, device):
         # because use opt.teacher_model_path
 
         # teacher_model_path = 'models/Alexnet-final.pth'
-        model = TeacherStudentModule(opt, device)
+        model = TeacherStudentModule(opt)
     else:
-        model = build_model(opt, opt.model, opt.phase, device)
+        model = build_model(opt, opt.model, opt.phase)
 
     # 19.6.4.
     # remove below lines > opt.model_type = 'new' is not trainable
@@ -938,10 +875,13 @@ def main():
     # 19.5.17 for ubuntu
     # torch.multiprocessing.set_start_method('spawn')
 
-    # 19.5.7 add
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    # # 19.5.7 add
+    # device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
     opt = parse_opts()
+
+    # 19.10.17 add
+    opt.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
     # `19.10.8 move from train_dataset()
     opt.scales = [opt.initial_scale]
@@ -1036,15 +976,15 @@ def main():
 
     for phase in phase_list:
         opt.phase = phase
-        model = build_final_model(opt, device)
+        model = build_final_model(opt)
         if phase == 'train':
-            train_dataset(opt, device, model)
+            train_dataset(opt, model)
         else:
             if opt.misaeng:
-                test_misaeng(opt, device, model)
+                test_misaeng(opt, model)
             else:
                 if not os.path.exists(out_path):
-                    res = test_dataset(opt, device, model)
+                    res = test_dataset(opt, model)
                     json.dump(res, open(out_path, 'w'))
                 eval_res.eval(opt.result_dir, opt.gt_dir, opt.train_data_type)
 
