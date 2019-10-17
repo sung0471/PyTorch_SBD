@@ -12,7 +12,7 @@ import copy
 # add parameter=model_type instead opt.model
 # 19.7.16.
 # moved from models/__init__.py
-def generate_model(opt, model_type, device):
+def generate_model(opt, model_type):
     assert model_type in ['resnet', 'alexnet', 'resnext', 'detector']
 
     if model_type == 'alexnet':
@@ -35,13 +35,13 @@ def generate_model(opt, model_type, device):
                                           phase=opt.phase, data_type=opt.train_data_type, policy=opt.layer_policy)
 
     # 19.7.31. add deepcopy
-    test_model = copy.deepcopy(model).to(device)
+    test_model = copy.deepcopy(model).to(opt.device)
 
-    for_test_tensor = torch.randn(opt.batch_size, 3, opt.sample_duration, opt.sample_size, opt.sample_size).to(device)
+    for_test_tensor = torch.randn(opt.batch_size, 3, opt.sample_duration, opt.sample_size, opt.sample_size).to(opt.device)
     if not opt.use_extra_layer:
         flops, params = profile(test_model, inputs=(for_test_tensor,))
     else:
-        start_boundaries = torch.zeros(opt.batch_size).to(device)
+        start_boundaries = torch.zeros(opt.batch_size).to(opt.device)
         for i in range(opt.batch_size):
             start_boundaries[i] = i * opt.sample_duration / 2
         flops, params = profile(test_model, inputs=(for_test_tensor, start_boundaries))
@@ -53,14 +53,14 @@ def generate_model(opt, model_type, device):
 # 19.6.26.
 # add parameter=model_type
 # for knowledge distillation
-def build_model(opt, model_type, phase, device):
+def build_model(opt, model_type, phase):
     if phase != "test" and phase != "train":
         print("Error: Phase not recognized")
         return
 
     # num_classes = opt.n_classes
     # 19.6.26. add 'model_type' parameter
-    model = generate_model(opt, model_type, device)
+    model = generate_model(opt, model_type)
 
     # model=gradual_cls(opt.sample_duration,opt.sample_size,opt.sample_size,model,num_classes)
     # print(model)
@@ -105,7 +105,7 @@ def build_model(opt, model_type, phase, device):
         # model.inplace를 다시 modelwise로 rollback
         # model.cuda()
         # model.to(device)
-        model = model.to(device)
+        model = model.to(opt.device)
 
         # `19.6.27.
         # use model.to(device)>Parallel 순서로 설정
