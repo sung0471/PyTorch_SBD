@@ -6,7 +6,7 @@ import os
 
 
 class TeacherStudentModule(nn.Module):
-    def __init__(self, opt, device):
+    def __init__(self, opt):
         self.phase = opt.phase
         # self.device = device
         super(TeacherStudentModule, self).__init__()
@@ -16,11 +16,11 @@ class TeacherStudentModule(nn.Module):
         # opt.teacher_model과 opt.model을 parameter로 삽입
 
         # opt.model = 'alexnet'
-        self.teacher_model = build_model(opt, opt.teacher_model, 'test', device)
+        self.teacher_model = build_model(opt, opt.teacher_model, 'test')
         self.load_checkpoint(self.teacher_model, opt.teacher_model_path)
 
         # opt.model = 'resnext'
-        self.student_model = build_model(opt, opt.model, self.phase, device)
+        self.student_model = build_model(opt, opt.model, self.phase)
 
     def forward(self, x):
         # x = x.to(self.device)
@@ -45,5 +45,5 @@ if __name__ == '__main__':
     opt.pretrain_path = os.path.join('../', opt.pretrain_path)
     opt.teacher_model_path = os.path.join('../', opt.teacher_model_path)
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    model = TeacherStudentModule(opt, device)
+    model = TeacherStudentModule(opt)
     print(model)
