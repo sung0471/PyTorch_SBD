@@ -5,27 +5,50 @@ import time
 import datetime
 from PIL import Image
 
+dataset = ['ClipShots/', 'RAI/', 'TRECVID/']
+dataset_idx = 2
+dataset_root_dir = os.path.join(dataset[dataset_idx]) if dataset_idx != 2 else os.path.join(dataset[dataset_idx], '07/')
+data_loader_list = 'data_list/'
+video_root = os.path.join(dataset_root_dir, 'videos/')
+list_path_dir = os.path.join(dataset_root_dir, 'video_lists/')
+gt_base_dir = os.path.join(dataset_root_dir, 'annotations/')
+gt_path = os.path.join(dataset_root_dir, 'annotations/', 'test.json')
 
-def print_frames(video_path, frame_pos, frame_end, image_path):
+
+def print_frames(video_path, images_root, pos_info=None, print_all=False):
     video_cap = cv2.VideoCapture(video_path)
-    video_cap.set(1, frame_pos)
-    for j in range(frame_pos, frame_end + 1):
-        status, frame = video_cap.read()
-        if not status:
-            break
-        else:
-            frame = Image.fromarray(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)).convert('RGB')
-            frame.save(os.path.join(image_path, str(j) + '.png'))
+    if not print_all:
+        for frame_pos, frame_end in pos_info:
+            video_cap.set(1, frame_pos)
+            if frame_end - frame_pos == 1:
+                transition_type = 'cut'
+            else:
+                transition_type = 'gradual'
+            image_path = os.path.join(images_root, transition_type)
+            for j in range(frame_pos, frame_end + 1):
+                status, frame = video_cap.read()
+                if not status:
+                    break
+                else:
+                    frame = Image.fromarray(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)).convert('RGB')
+                    frame.save(os.path.join(image_path, str(j) + '.png'))
+    else:
+        image_path = os.path.join(images_root, 'all')
+        status = True
+        j = 0
+        while status:
+            status, frame = video_cap.read()
+            if not status:
+                break
+            else:
+                frame = Image.fromarray(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)).convert('RGB')
+                frame.save(os.path.join(image_path, str(j) + '.png'))
+                j += 1
 
 
 def get_gt_dirs(path_type, check_dataset, dataloader_name=None):
     video_name_list = dict()
     gts = dict()
-    dataset_root_dir = 'ClipShots/'
-    dataloader_list = 'data_list/'
-    video_root = os.path.join(dataset_root_dir, 'videos/')
-    list_path_dir = os.path.join(dataset_root_dir, 'video_lists/')
-    gt_base_dir = os.path.join(dataset_root_dir, 'annotations/')
     if dataloader_name is None:
         for i, p_type in enumerate(path_type):
             if check_dataset[i]:
@@ -47,7 +70,7 @@ def get_gt_dirs(path_type, check_dataset, dataloader_name=None):
     else:
         for i, dataloader_file_name in enumerate(dataloader_name):
             if check_dataset[i]:
-                dataloader_path = os.path.join(dataloader_list, dataloader_file_name + '.txt')
+                dataloader_path = os.path.join(data_loader_list, dataloader_file_name + '.txt')
                 with open(dataloader_path, 'r') as f:
                     for line in f.readlines():
                         words = line.split(' ')
@@ -106,52 +129,49 @@ def get_gt_dirs(path_type, check_dataset, dataloader_name=None):
         return 0
 
 
-def get_images(path_type, video_name_list, gts):
-    for dataset_idx, p_type in enumerate(path_type):
+def get_images(path_type, video_name_list, gts, print_all=False):
+    for p_type in path_type:
         # file_name = "hUoDOxOxK1I.mp4"
 
         total_start_time = time.time()
         if p_type in video_name_list.keys():
             for i, file_name in enumerate(video_name_list[p_type]):
+                images_root = os.path.join('images', p_type, file_name)
+                if not os.path.exists(images_root):
+                    os.makedirs(images_root)
+                    os.mkdir(os.path.join(images_root, 'cut'))
+                    os.mkdir(os.path.join(images_root, 'gradual'))
+                    os.mkdir(os.path.join(images_root, 'all'))
+
+                print('video {} start'.format(file_name), flush=True)
                 per_video_start_time = time.time()
 
-                video_base_dir = "ClipShots/videos/"
-                if p_type != 'result':
-                    video_path = os.path.join(video_base_dir, p_type, file_name)
+                if not print_all:
+                    if p_type != 'result':
+                        video_path = os.path.join(video_root, p_type, file_name)
+                    else:
+                        video_path = os.path.join(video_root, 'test', file_name)
+
+                    if p_type != 'result':
+                        pos_info = gts[p_type][file_name]["transitions"]
+                        if file_name == 'hUoDOxOxK1I.mp4':
+                            pos_info += [[3113, 3133]]
+                    else:
+                        pos_info = gts[p_type][file_name]
+
+                    if p_type != 'result':
+                        for j, (frame_pos, frame_end) in enumerate(pos_info):
+                            if frame_end - frame_pos == 1:
+                                frame_pos -= 1
+                                frame_end += 1
+                                pos_info[j] = [frame_pos, frame_end]
+                        print_frames(video_path, images_root, pos_info)
+                    else:
+                        for _, data in pos_info.items():
+                            print_frames(video_path, images_root, data)
                 else:
-                    video_path = os.path.join(video_base_dir, 'test', file_name)
-
-                if p_type != 'result':
-                    pos_info = gts[p_type][file_name]["transitions"]
-                    if file_name == 'hUoDOxOxK1I.mp4':
-                        pos_info += [[3113, 3133]]
-                else:
-                    pos_info = gts[p_type][file_name]
-
-                images_path = os.path.join('images', p_type, file_name)
-
-                if not os.path.exists(images_path):
-                    os.makedirs(images_path)
-                    os.mkdir(os.path.join(images_path, 'cut'))
-                    os.mkdir(os.path.join(images_path, 'gradual'))
-
-                if p_type != 'result':
-                    for frame_pos, frame_end in pos_info:
-                        if frame_end - frame_pos == 1:
-                            transition_type = 'cut'
-                            frame_pos -= 3
-                            frame_end += 3
-                        else:
-                            transition_type = 'gradual'
-                        image_path = os.path.join(images_path, transition_type)
-                        print_frames(video_path, frame_pos, frame_end, image_path)
-
-                else:
-                    for type, data in pos_info.items():
-                        for frame_pos, frame_end in data:
-                            transition_type = type
-                            image_path = os.path.join(images_path, transition_type)
-                            print_frames(video_path, frame_pos, frame_end, image_path)
+                    video_path = os.path.join(video_root, 'test', file_name)
+                    print_frames(video_path, images_root, print_all=print_all)
 
                 per_video_end_time = time.time() - per_video_start_time
 
@@ -163,21 +183,21 @@ def get_images(path_type, video_name_list, gts):
 if __name__ == '__main__':
     path_type = ['train', 'only_gradual', 'test', 'result']
     check_dataset = [False, False, False, False]
-    dataloader_name = ['deepSBD', 'detector', 'detector_new']
-    check_dataloader = [False, False, False]
+    data_loader_name = ['deepSBD', 'detector', 'detector_new']
+    check_data_loader = [False, False, False]
 
     if True in check_dataset:
         video_name_list, gts = get_gt_dirs(path_type, check_dataset)
         get_images(path_type, video_name_list, gts)
-    elif True in check_dataloader:
-        get_gt_dirs(path_type, check_dataloader, dataloader_name)
+    elif True in check_data_loader:
+        get_gt_dirs(path_type, check_data_loader, data_loader_name)
 
     video_to_frame = True
+    print_all = True
     if video_to_frame:
-        video_name = ['9MMTTdr-tbI.mp4']
+        video_name = ['BG_11362.mpg']
         video_name_list = {'test': video_name}
-        gt_path = os.path.join('ClipShots', 'annotations', 'test.json')
         # gt_path = os.path.join('../results/_draw/', 'results.json')
         gt = json.load(open(gt_path, 'rt'))
         gts = {'test': gt}
-        get_images(['test'], video_name_list, gts)
+        get_images(['test'], video_name_list, gts, print_all)
