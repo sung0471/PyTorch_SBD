@@ -247,7 +247,7 @@ def get_frames_labels(prediction_list, opt):
             for cls in range(1, opt.n_classes):
                 cls_idx = prediction_list[:, -1] == cls
                 nms_list = prediction_list[cls_idx]
-                ids, count = nms(nms_list[:, :2], nms_list[:, -2], overlap=0.5)
+                ids, count = nms(nms_list[:, :2], nms_list[:, -2], overlap=opt.nms_threshold)
                 end_count += count
                 all_result[start_count:end_count] = nms_list[ids[:count]]
                 start_count += count
@@ -470,7 +470,8 @@ def test_dataset(opt, model):
     target_transform = None
     # list_root_path : train path, only_gradual path
     # `19.3.7 : add only_gradual path
-    root_dir = os.path.join(opt.root_dir, opt.test_subdir)
+    # `19.10.18 : opt.root_dir > opt.video_dir
+    root_dir = os.path.join(opt.video_dir, opt.test_subdir)
     # print(root_dir, flush=True)
     # print(opt.test_list_path, flush=True)
     with open(opt.test_list_path, 'r') as f:
@@ -480,13 +481,16 @@ def test_dataset(opt, model):
     data_name_list = ['predictions']
     pickle_utils = PickleUtils(opt, video_name_list, data_name_list)
 
+    gts = json.load(open(opt.gt_dir, 'r'))
+
     res = {}
     # print('\n====> Testing Start', flush=True)
     epoch_time = time.time()
     for idx, video_name in enumerate(video_name_list):
         video_time = time.time()
-        print("Process {} : {}".format(idx + 1, video_name), flush=True)
-        test_data = test_DataSet(root_dir, video_name,
+        print("Process {} : {}\n"
+              "Path : {}".format(idx + 1, video_name, os.path.join(root_dir, video_name)), flush=True)
+        test_data = test_DataSet(root_dir, video_name, gts[video_name]['frame_num'],
                                  spatial_transform=spatial_transform,
                                  temporal_transform=temporal_transform,
                                  target_transform=target_transform,
@@ -514,6 +518,9 @@ def test_dataset(opt, model):
             _res = {opt.train_data_type: list()}
 
         for begin, end, label in final_res:
+            if opt.dataset == 'TRECVID07':
+                begin += 2
+                end += 2
             if label == 2:
                 _res['cut'].append((begin, end))
             else:
@@ -810,8 +817,9 @@ def train_dataset(opt, model):
         # list_root_path.append(os.path.join(opt.root_dir, opt.train_subdir))
         # list_root_path.append(os.path.join(opt.root_dir, opt.only_gradual_subdir))
         # print(list_root_path, flush=True)
+        # `19.10.18 : opt.root_dir > opt.video_dir
         print("[INFO] reading : ", opt.video_list_path, flush=True)
-        training_data = train_DataSet(opt.root_dir, opt.video_list_path, opt,
+        training_data = train_DataSet(opt.video_dir, opt.video_list_path, opt,
                                       spatial_transform=spatial_transform,
                                       temporal_transform=temporal_transform,
                                       target_transform=target_transform,
@@ -905,10 +913,16 @@ def main():
 
     # `19.10.8. add
     # check dataset and set opt.root_dir
-    assert opt.dataset in ['ClipShots', 'RAI']
-    opt.root_dir = os.path.join('data/', opt.dataset, 'videos/')
-    opt.test_list_path = os.path.join('data/', opt.dataset, 'video_lists/test.txt')
-    opt.gt_dir = os.path.join('data/', opt.dataset, 'annotations/test.json')
+    # `19.10.18 revise
+    # opt.root_dir > opt.video_dir
+    assert opt.dataset in ['ClipShots', 'RAI', 'TRECVID07']
+    if opt.dataset[:-2] == 'TRECVID':
+        dataset_path = os.path.join(opt.dataset[:-2], opt.dataset[-2:])
+    else:
+        dataset_path = opt.dataset
+    opt.video_dir = os.path.join(opt.root_dir, dataset_path, opt.video_dir)
+    opt.test_list_path = os.path.join(opt.root_dir, dataset_path, opt.test_list_path)
+    opt.gt_dir = os.path.join(opt.root_dir, dataset_path, opt.gt_dir)
 
     # iter_per_epoch을 opt.is_full_data와 opt.batch_size에 맞게 자동으로 조정
     if opt.iter_per_epoch == 0:
@@ -966,9 +980,7 @@ def main():
     # else:
     #     model = build_model(opt, opt.phase, device)
     # print(model)
-
     assert opt.input_type in ['RGB', 'HSV']
-    out_path = os.path.join(opt.result_dir, 'results.json')
     if opt.phase == 'full':
         phase_list = ['train', 'test']
     else:
@@ -983,10 +995,11 @@ def main():
             if opt.misaeng:
                 test_misaeng(opt, model)
             else:
+                out_path = os.path.join(opt.result_dir, 'results.json')
                 if not os.path.exists(out_path):
                     res = test_dataset(opt, model)
                     json.dump(res, open(out_path, 'w'))
-                eval_res.eval(opt.result_dir, opt.gt_dir, opt.train_data_type)
+                eval_res.eval(opt)
 
 
 if __name__ == '__main__':
