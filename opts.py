@@ -3,19 +3,20 @@ import argparse
 
 def parse_opts():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--phase', default='full', type=str, help='train | test | full')
+    parser.add_argument('--phase', default='test', type=str, help='train | test | full')
     parser.add_argument('--misaeng', default=False, help='if true, test misaeng')
     parser.add_argument('--gpu_num', type=int, default=1)
     parser.add_argument('--cuda', action='store_true', help='If true, cuda is used.')
     parser.set_defaults(cuda=True)
-    parser.add_argument('--dataset', default='ClipShots', required=False, type=str, help='ClipShots | RAI')
-    parser.add_argument('--root_dir', type=str, help='Root directory path of data')
-    parser.add_argument('--test_list_path', type=str, help='test list path')
+    parser.add_argument('--root_dir', default='data', type=str, help='Root directory path of data')
+    parser.add_argument('--dataset', default='ClipShots', required=False, type=str, help='ClipShots | RAI | TRECVID07')
+    parser.add_argument('--video_dir', default='videos', type=str, help='Root directory path of data')
+    parser.add_argument('--test_list_path', default='video_lists/test.txt', type=str, help='test list path')
     parser.add_argument('--video_list_path', default='data/data_list/detector.txt', type=str)
     parser.add_argument('--train_subdir', type=str, default='train', help='subdirectory for training set')
     parser.add_argument('--only_gradual_subdir', type=str, default='only_gradual', help='subdirectory for only_gradual')
     parser.add_argument('--test_subdir', type=str, default='test', help='subdirectory for testing set')
-    parser.add_argument('--gt_dir', default='data/ClipShots/annotations/test.json', type=str,
+    parser.add_argument('--gt_dir', default='annotations/test.json', type=str,
                         help='directory contains ground truth for test set')
     parser.add_argument('--result_dir', default='results', type=str, help='Result directory path')
     parser.add_argument('--resume_path', default='', type=str, help='Save data (.pth) of previous training')
@@ -69,6 +70,7 @@ def parse_opts():
     parser.add_argument('--eps', default=1e-8, type=float, help="Adam's eps")
     parser.add_argument('--optimizer', default='adam', type=str, help='sgd | adam')
     parser.add_argument('--neg_threshold', default=(0.33, 0.5), help='negative threshold for cut, gradual')
+    parser.add_argument('--nms_threshold', default=0.33, type=float, help='nms threshold')
     parser.add_argument('--lr_patience', default=10, type=int,
                         help='Patience of LR scheduler. See documentation of ReduceLROnPlateau.')
     parser.add_argument('--norm_value', default=1, type=int,
