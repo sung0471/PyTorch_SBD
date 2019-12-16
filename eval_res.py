@@ -19,10 +19,11 @@ def get_union_cnt(set1, set2):
         gt_check = False
         for _begin, _end in set2:
             if if_overlap(begin, end, _begin, _end):
-                cnt += 1
-                tp.append([_begin, _end])
-                gt_check = not gt_check
-                break
+                if [_begin, _end] not in tp:
+                    cnt += 1
+                    tp.append([_begin, _end])
+                    gt_check = not gt_check
+                    break
         if not gt_check:
             fn.append([begin, end])
     for transition in set2:
@@ -40,16 +41,16 @@ def pre_recall_f1(a, b, c):
     return precision, recall, f1
 
 
-def eval(result_dir, gt_path, train_data_type):
-    predict_path = os.path.join(result_dir, 'results.json')
+def eval(opt):
+    predict_path = os.path.join(opt.result_dir, 'results.json')
     predicts = json.load(open(predict_path))
-    gts = json.load(open(gt_path))
+    gts = json.load(open(opt.gt_dir))
     print(len(predicts))
 
-    if train_data_type == 'normal':
+    if opt.train_data_type == 'normal':
         transition_type = ['cut', 'gradual']
     else:
-        transition_type = [train_data_type]
+        transition_type = [opt.train_data_type]
 
     gt = dict()
     predict = dict()
@@ -124,8 +125,8 @@ def eval(result_dir, gt_path, train_data_type):
             print("{} not found in Ground Truth".format(videoname))
             raise Exception()
 
-    tp_tn_fp_fn_path = os.path.join(result_dir, 'tp_tn_fp_fn.json')
-    tp_fp_fn_list_path = os.path.join(result_dir, 'tp_fp_fn_list.json')
+    tp_tn_fp_fn_path = os.path.join(opt.result_dir, 'tp_tn_fp_fn.json')
+    tp_fp_fn_list_path = os.path.join(opt.result_dir, 'tp_fp_fn_list.json')
     json.dump(tp_tn_fp_fn, open(tp_tn_fp_fn_path, 'w'), indent=2)
     json.dump(tp_fp_fn_list, open(tp_fp_fn_list_path, 'w'), indent=2)
 
