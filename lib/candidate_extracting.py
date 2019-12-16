@@ -12,7 +12,7 @@ from models.squeezenet import SqueezeNetFeature
 from lib.spatial_transforms import *
 
 
-def candidate_extraction(root_dir, video_file, model, adjacent=True):
+def candidate_extraction(root_dir, video_file, total_frame, model, adjacent=True):
     video_name = str(os.path.splitext(video_file)[0])
     video_full_name = os.path.join(root_dir, video_name)
     video_dir = os.path.join(root_dir, video_file)
@@ -20,10 +20,9 @@ def candidate_extraction(root_dir, video_file, model, adjacent=True):
     # print('[INFO] loading video...', flush=True)
     # input video (cv2)
     cap = cv2.VideoCapture(video_dir)
-    total_frame = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
     fps = int(cap.get(cv2.CAP_PROP_FPS))
 
-    video = []
+    video = list()
     while (cap.isOpened()):
         _, frame_image = cap.read()
         frame_num = int(cap.get(cv2.CAP_PROP_POS_FRAMES))
@@ -121,9 +120,9 @@ def candidate_extraction(root_dir, video_file, model, adjacent=True):
         plt.title('cosine similarity')
         plt.show()
 
-    boundary_index = np.array([])
-    new_arr = []
-    new_boundary_index = []
+    boundary_index = np.array(list())
+    new_arr = list()
+    new_boundary_index = list()
     if adjacent:
         for i in range(cos_sim.shape[0]):
             if cos_sim[i] > 0.2:
@@ -181,7 +180,7 @@ def candidate_extraction(root_dir, video_file, model, adjacent=True):
                     f.write('transitive# ' + str(bound_1) + ' ~ ' + str(bound_2) + '\n')
                     f.write('\n')
 
-    return boundary_index, total_frame, fps
+    return boundary_index
 
 
 if __name__ == '__main__':
