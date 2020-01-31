@@ -338,8 +338,32 @@ def nms(bars, scores, overlap=0.5, top_k=0):
         rem_lengths = torch.index_select(length, 0, idx)  # [--num], load remaining lengths, not include top_1
         union = length[i] + rem_lengths - inter
         IoU = inter / union  # store result in iou
-        # keep only elements with an IoU <= overlap
-        idx = idx[IoU.le(overlap)]
+
+        check_policy = 1
+        # keep elements with an IoU <= overlap
+        check_iou = IoU.le(overlap)
+
+        if check_policy == 1:
+            # nms = 0.33
+            idx = idx[check_iou]
+        elif check_policy == 2:
+            # nms = 0.67 and
+            # keep elements with start[i] - ss != 1
+            check_location = (ss - start[i].item()) != 1
+            check_overlap = check_iou + check_location
+
+            idx = idx[check_overlap == 2]
+        else:
+            # nms = 0.6 and
+            # keep elements with not (start[i] - ss == 1 and IoU == 0.5)
+            check_location = (ss - start[i].item()) == 1
+            check_iou_2 = IoU == 0.5
+            check_exception = check_location + check_iou_2 != 2
+
+            check_overlap = check_iou + check_exception
+
+            idx = idx[check_overlap == 2]
+
     return keep, count
 
 
