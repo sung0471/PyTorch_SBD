@@ -1,13 +1,14 @@
 import os
 import json
 import cv2
-from PIL import Image
 
 import xml.etree.ElementTree as elemTree
 from shutil import copy2
 from utils.time_control import TimeControl
 
-dataset_video_origin = 'E:/video/TRECVID/2007/shot.test'
+dataset_video_origin_root = 'E:/dataset'
+dataset_video_origin_path = 'TRECVID/2007/shot.test'
+dataset_video_origin = os.path.join(dataset_video_origin_root, dataset_video_origin_path)
 dataset_video_root = 'videos/test'
 dataset_annotation_dir = 'annotations'
 if not os.path.exists(dataset_video_root):
@@ -16,6 +17,7 @@ if not os.path.exists(dataset_video_root):
     os.makedirs(dataset_video_root)
 if not os.path.exists(dataset_annotation_dir):
     os.makedirs(dataset_annotation_dir)
+
 
 def make_dataset_TRECVID():
     xml_tree = elemTree.parse('ref/shotBoundaryReferenceFiles.xml')
@@ -87,4 +89,4 @@ def check_10_frames(video_name):
 
 if __name__ == '__main__':
     make_dataset_TRECVID()
-    check_10_frames('BG_11362.mpg')
+    # check_10_frames('BG_11362.mpg')
