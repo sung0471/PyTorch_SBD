@@ -71,10 +71,6 @@ def check_train_dataset_function(video_root, video_list_path, opt):
 
 
 def check_test_dataset_function(video_root, video_name_list, opt, gts):
-    test_root_dir = os.path.join(video_root, opt.test_subdir)
-    datset = test_dataset(test_root_dir, video_name_list["test"]["list"])
-    test_data_list = datset.video_list
-
     test_total = dict()
     test_total["train"] = dict()
     test_total["only_gradual"] = dict()
@@ -85,12 +81,16 @@ def check_test_dataset_function(video_root, video_name_list, opt, gts):
         test_total[key]["total"] = 0
         test_total[key]["else"] = {"length": 0, "list": list()}
 
-    test_video_count = []
-    for line in test_data_list:
-        line_video_path = line["video_path"]
-
-        if not (line_video_path in test_video_count):
-            test_video_count.append(line_video_path)
+    # test_root_dir = os.path.join(video_root, opt.test_subdir)
+    # datset = test_dataset(test_root_dir, video_name_list["test"]["list"])
+    # test_data_list = datset.video_list
+    #
+    # test_video_count = []
+    # for line in test_data_list:
+    #     line_video_path = line["video_path"]
+    #
+    #     if not (line_video_path in test_video_count):
+    #         test_video_count.append(line_video_path)
 
     max_transition = {"info": (0, 0), "value": 0}
     min_transition = {"info": (0, 0), "value": 128}
@@ -211,35 +211,34 @@ def check_gt_transition_min_max_function(gts):
 
 if __name__ == '__main__':
     opt = parse_opts()
-    root_dir = "ClipShots"
+    root_dir = "TRECVID/07"
 
     video_list_root = os.path.join(root_dir, "video_lists")
-    dataset_type_list = ["train", "only_gradual", "test"]
+    dataset_type_list = ["test"]
 
     video_path_dict = dict()
     for dataset_type in dataset_type_list:
         video_path_dict[dataset_type] = os.path.join(video_list_root, dataset_type + ".txt")
 
     video_name_list = dict()
+    print_str = "all video count : "
     for dataset_type, list_path in video_path_dict.items():
         with open(list_path, 'r') as f:
             video_name_list[dataset_type] = dict()
             video_name_list[dataset_type]["list"] = [line.strip('\n') for line in f.readlines()]
             video_name_list[dataset_type]["count"] = len(video_name_list[dataset_type]["list"])
+            print_str += '{}({}),'.format(dataset_type, video_name_list[dataset_type]["count"])
 
-    print("all video count : train({}), only_gradual({}), test({})".
-          format(video_name_list["train"]["count"],
-                 video_name_list["only_gradual"]["count"],
-                 video_name_list["test"]["count"]))
+    print(print_str)
 
     video_list_path = "data_list/deepSBD.txt"
 
     check_data_list = False
     check_train_dataset = False
-    check_test_dataset = False
+    check_test_dataset = True
     check_data_set = False
     check_gt_transition_min_max = False
-    dataset_category_check = True
+    dataset_category_check = False
 
     if check_data_list:
         check_data_list_function(video_list_path, dataset_type_list)
