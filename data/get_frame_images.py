@@ -6,25 +6,34 @@ import datetime
 from PIL import Image
 
 dataset = ['ClipShots/', 'RAI/', 'TRECVID/']
-dataset_idx = 2
+dataset_idx = 0
 dataset_root_dir = os.path.join(dataset[dataset_idx]) if dataset_idx != 2 else os.path.join(dataset[dataset_idx], '07/')
 data_loader_list = 'data_list/'
 video_root = os.path.join(dataset_root_dir, 'videos/')
 list_path_dir = os.path.join(dataset_root_dir, 'video_lists/')
 gt_base_dir = os.path.join(dataset_root_dir, 'annotations/')
-gt_path = os.path.join(dataset_root_dir, 'annotations/', 'test.json')
+gt_path = os.path.join(dataset_root_dir, 'annotations/', 'test_191213.json')
+result_path = os.path.join('../results/', 'results.json')
 
 
-def print_frames(video_path, images_root, pos_info=None, print_all=False):
+def print_frames(video_path, images_root, pos_info=None, real_transition_type=None, print_all=False):
     video_cap = cv2.VideoCapture(video_path)
     if not print_all:
         for frame_pos, frame_end in pos_info:
             video_cap.set(1, frame_pos)
-            if frame_end - frame_pos == 1:
-                transition_type = 'cut'
+            if real_transition_type is None:
+                if frame_end - frame_pos == 1:
+                    transition_type = 'cut'
+                else:
+                    transition_type = 'gradual'
             else:
-                transition_type = 'gradual'
+                transition_type = real_transition_type
             image_path = os.path.join(images_root, transition_type)
+
+            if transition_type == 'cut':
+                frame_pos -= 1
+                frame_end += 1
+
             for j in range(frame_pos, frame_end + 1):
                 status, frame = video_cap.read()
                 if not status:
@@ -160,15 +169,10 @@ def get_images(path_type, video_name_list, gts, print_all=False):
                         pos_info = gts[p_type][file_name]
 
                     if p_type != 'result':
-                        for j, (frame_pos, frame_end) in enumerate(pos_info):
-                            if frame_end - frame_pos == 1:
-                                frame_pos -= 1
-                                frame_end += 1
-                                pos_info[j] = [frame_pos, frame_end]
                         print_frames(video_path, images_root, pos_info)
                     else:
-                        for _, data in pos_info.items():
-                            print_frames(video_path, images_root, data)
+                        for transition_type, data in pos_info.items():
+                            print_frames(video_path, images_root, data, transition_type)
                 else:
                     video_path = os.path.join(video_root, 'test', file_name)
                     print_frames(video_path, images_root, print_all=print_all)
@@ -193,11 +197,13 @@ if __name__ == '__main__':
         get_gt_dirs(path_type, check_data_loader, data_loader_name)
 
     video_to_frame = True
-    print_all = True
+    print_all = False
     if video_to_frame:
-        video_name = ['BG_11362.mpg']
-        video_name_list = {'test': video_name}
+        video_name = ['vj_OJ5Bqf8g.mp4']
+        dir_name = 'result'
+        video_name_list = {dir_name: video_name}
         # gt_path = os.path.join('../results/_draw/', 'results.json')
         gt = json.load(open(gt_path, 'rt'))
-        gts = {'test': gt}
-        get_images(['test'], video_name_list, gts, print_all)
+        result = json.load(open(result_path, 'rt'))
+        gts = {'test': gt, 'result': result}
+        get_images(['result'], video_name_list, gts, print_all)
