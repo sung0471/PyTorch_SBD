@@ -329,10 +329,11 @@ def test(video_path, test_data_loader, model, opt):
     return prediction_list
 
 
-def load_checkpoint(model, opt_model):
-    path = 'results/model_final.pth'
+def load_checkpoint(model, opt):
+    model_type = opt.model
+    path = opt.test_weight
 
-    print("load model... : ", opt_model)
+    print("load model... : ", model_type)
     checkpoint = torch.load(path)
     model.load_state_dict(checkpoint['state_dict'])
 
@@ -345,7 +346,7 @@ def test_misaeng(opt, model):
     #     model = teacher_student_net(opt, teacher_model_path, 'test', device)
     # else:
     #     model = build_model(opt, 'test', device)
-    load_checkpoint(model, opt.model)
+    load_checkpoint(model, opt)
     # model.eval()
 
     spatial_transform = get_test_spatial_transform(opt)
@@ -462,7 +463,7 @@ def test_dataset(opt, model):
     #     model = teacher_student_net(opt, teacher_model_path, 'test', device)
     # else:
     #     model = build_model(opt, 'test', device)
-    load_checkpoint(model, opt.model)
+    load_checkpoint(model, opt)
     # model.eval()
 
     spatial_transform = get_test_spatial_transform(opt)
@@ -681,7 +682,7 @@ def train(cur_iter, iter_per_epoch, epoch, data_loader, model, criterion, optimi
     print("Training Time : {}".format(total_time), flush=True)
     total_acc['Training_Time'] = str(total_time)
 
-    save_file_path = os.path.join(opt.result_dir, 'model_final.pth'.format(opt.checkpoint_path))
+    save_file_path = os.path.join(opt.result_dir, 'model_final.pth')
     print("save to {}".format(save_file_path), flush=True)
     states = {
         'state_dict': model.state_dict(),
@@ -711,20 +712,6 @@ def get_lastest_model(opt):
 
 
 def train_dataset(opt, model):
-    # opt = parse_opts()
-
-    # opt.scales = [opt.initial_scale]
-    # for i in range(1, opt.n_scales):
-    #     opt.scales.append(opt.scales[-1] * opt.scale_step)
-    #
-    # opt.mean = get_mean(opt.norm_value)
-    # print(opt)
-    #
-    # torch.manual_seed(opt.manual_seed)
-
-    # # 19.3.8. add
-    # print("cuda is available : ", torch.cuda.is_available(), flush=True)
-
     # # 19.5.16 add
     # # set default tensor type
     # if torch.cuda.is_available() and opt.cuda:
@@ -818,8 +805,8 @@ def train_dataset(opt, model):
         # list_root_path.append(os.path.join(opt.root_dir, opt.only_gradual_subdir))
         # print(list_root_path, flush=True)
         # `19.10.18 : opt.root_dir > opt.video_dir
-        print("[INFO] reading : ", opt.video_list_path, flush=True)
-        training_data = train_DataSet(opt.video_dir, opt.video_list_path, opt,
+        print("[INFO] reading : ", opt.train_list_path, flush=True)
+        training_data = train_DataSet(opt.video_dir, opt.train_list_path, opt,
                                       spatial_transform=spatial_transform,
                                       temporal_transform=temporal_transform,
                                       target_transform=target_transform,
@@ -839,30 +826,26 @@ def train_dataset(opt, model):
 
 
 def build_final_model(opt):
+    # 19.5.20. move from main()
     assert opt.phase in ['train', 'test']
-    # 19.6.4 remove
-    # is not used
-    # 19.6.26 revive
+    # 19.6.4 remove, opt.model_type is not used
+    # 19.6.26 reuse
     # 19.6.28 remove
     # assert opt.model_type in ['old', 'new']
 
-    # 19.5.7. add
-    # teacher student option add
+    # 19.5.7. teacher student option add
     if opt.loss_type == 'KDloss':
-        # 19.6.26.
-        # remove teacher_model_path
+        # 19.6.26. remove teacher_model_path
         # because use opt.teacher_model_path
-
         # teacher_model_path = 'models/Alexnet-final.pth'
         model = TeacherStudentModule(opt)
     else:
         model = build_model(opt, opt.model, opt.phase)
 
-    # 19.6.4.
-    # remove below lines > opt.model_type = 'new' is not trainable
-    # 19.6.26.
-    # benchmark를 new type model일 때 전체적으로 적용 > 시도해볼 필요 있음
-    # 19.6.28. remove
+    # 19.5.20 add
+    # 19.6.4 remove below lines > opt.model_type = 'new' is not trainable
+    # 19.6.26 benchmark를 new type model일 때 전체적으로 적용 > 시도해볼 필요 있음
+    # 19.6.28 remove
     # if opt.cuda and opt.model_type == 'new':
     #     torch.backends.benchmark = True
     #     # use multi_gpu for training and testing
@@ -881,17 +864,17 @@ def main():
     print(torch.__version__)
 
     # 19.5.17 for ubuntu
+    # 19.6.14 주석처리
     # torch.multiprocessing.set_start_method('spawn')
-
-    # # 19.5.7 add
-    # device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
     opt = parse_opts()
 
-    # 19.10.17 add
+    # 19.5.7 add
+    # 19.5.16. move from other functions
+    # 19.10.17 revise, device → opt.device
     opt.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-    # `19.10.8 move from train_dataset()
+    # 19.10.8 move from train_dataset()
     opt.scales = [opt.initial_scale]
     for i in range(1, opt.n_scales):
         opt.scales.append(opt.scales[-1] * opt.scale_step)
@@ -902,84 +885,15 @@ def main():
     torch.manual_seed(opt.manual_seed)
 
     # 19.3.8. add
+    # 19.5.16. move from train_dataset()
     print("cuda is available : ", torch.cuda.is_available(), flush=True)
 
-    # `19.7.7. add
-    # parallel>benchmark>cuda 순서 적용한 부분 추가
-    # `19.7.10. 주석처리
-    # if torch.cuda.is_available() and opt.cuda:
-    #     torch.backends.benchmark = True
-    #     model=model.to(device)
-
-    # `19.10.8. add
-    # check dataset and set opt.root_dir
-    # `19.10.18 revise
-    # opt.root_dir > opt.video_dir
-    assert opt.dataset in ['ClipShots', 'RAI', 'TRECVID07']
-    if opt.dataset[:-2] == 'TRECVID':
-        dataset_path = os.path.join(opt.dataset[:-2], opt.dataset[-2:])
-    else:
-        dataset_path = opt.dataset
-    opt.video_dir = os.path.join(opt.root_dir, dataset_path, opt.video_dir)
-    opt.test_list_path = os.path.join(opt.root_dir, dataset_path, opt.test_list_path)
-    opt.gt_dir = os.path.join(opt.root_dir, dataset_path, opt.gt_dir)
-
-    # iter_per_epoch을 opt.is_full_data와 opt.batch_size에 맞게 자동으로 조정
-    if opt.iter_per_epoch == 0:
-        if opt.is_full_data:
-            opt.iter_per_epoch = 500000
-            # if not opt.use_extra_layer:
-            #     opt.iter_per_epoch = 500000
-            # else:
-            #     opt.iter_per_epoch = 250000
-        else:
-            opt.iter_per_epoch = 70000
-            # if not opt.use_extra_layer:
-            #     opt.iter_per_epoch = 70000
-            # else:
-            #     opt.iter_per_epoch = 34000
-
-    opt.iter_per_epoch = int(opt.iter_per_epoch / opt.batch_size)
-    print("iter_per_epoch : {}, batch_size : {}".format(opt.iter_per_epoch, opt.batch_size))
-
-    # set n_classes automatically
-    assert opt.train_data_type in ['normal', 'cut', 'gradual']
-    if opt.train_data_type == 'normal':
-        opt.n_classes = 3
-    else:
-        opt.n_classes = 2
-        if opt.train_data_type == 'cut':
-            if opt.layer_policy == 'second':
-                opt.neg_threshold = opt.neg_threshold[1]
-            else:
-                opt.neg_threshold = opt.neg_threshold[0]
-        else:
-            opt.neg_threshold = opt.neg_threshold[1]
-
-    # 19.5.16 add
-    # set default tensor type
-    # 19.6.26.
-    # model generate 시 적용되게 수정
-    # 19.7.1.
-    # model 완성전에 benchmark 수행하게 설정
-    # 19.7.10. 주석처리
-    # if torch.cuda.is_available() and opt.cuda:
-    #     torch.backends.benchmark = True
-
-    # ubuntu에서 주석처리해서 > 에러해결
+    # 19.5.16 set default tensor type
+    # 19.6.26 ubuntu에서 주석처리해서 > 에러해결
     #     torch.set_default_tensor_type('torch.cuda.FloatTensor')
     # else:
     #     torch.set_default_tensor_type('torch.FloatTensor')
 
-    # assert opt.phase in ['train', 'test']
-    # # 19.5.7. add
-    # # teacher student option add
-    # if opt.loss_type == 'KDloss':
-    #     teacher_model_path = 'models/Alexnet-final.pth'
-    #     model = teacher_student_net(opt, teacher_model_path, device)
-    # else:
-    #     model = build_model(opt, opt.phase, device)
-    # print(model)
     assert opt.input_type in ['RGB', 'HSV']
     if opt.phase == 'full':
         phase_list = ['train', 'test']
@@ -1003,9 +917,6 @@ def main():
 
 
 if __name__ == '__main__':
-    # # 19.5.7 add
-    # device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-
     main()
     # train_dataset(device)
     # test_dataset(device)
