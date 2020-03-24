@@ -1,14 +1,182 @@
-# DeepSBD for ClipShots
-This repository contains our implementation of [deepSBD](https://arxiv.org/abs/1705.08214) for [ClipShots](https://github.com/Tangshitao/ClipShots). The code is modified from [here](https://github.com/kenshohara/3D-ResNets-PyTorch).
+# Shot Boundary Detection using 3D CNN
+- This repository contains our implementation of Shot Boundary Detection.
+- The code is modified from here
+    - Can Spatiotemporal 3D CNNs Retrace the History of 2D CNNs and ImageNet?
+	[paper](https://arxiv.org/abs/1711.09577),
+	[code](https://github.com/kenshohara/3D-ResNets-PyTorch)
+    - Fast Video Shot Transition Localization with Deep Structured Models
+	[paper](https://arxiv.org/pdf/1808.04234.pdf),
+	[code](https://github.com/Tangshitao/ClipShots_basline)
 
-## Introduction
-We implement deepSBD in this repository. There are 2 backbones that can be selected, including the original Alexnet-like and ResNet-18 introduced in our [paper](https://arxiv.org/pdf/1808.04234.pdf).
+## Dataset
+- directory structure
+    
+        data/[dataset_name]/
+            annotations/    : annotations of videos
+            video_lists/    : video file name list
+            videos/         : video files
+            
+1. ClipShots Dataset ([From here](https://github.com/Tangshitao/ClipShots))
+    - directory
+    
+    		data/ClipShots/
+        
+    - clone above repository to directory `data/`
+    - download videos from above repository
+2. RAI Dataset ([From here](http://aimagelab.ing.unimore.it/imagelab/researchActivity.asp?idActivity=019))
+    - directory
+    
+    		data/RAI/
+        
+    - save videos to `data/RAI/videos/test`
+    - prepare annotations and video_lists (not now in repository)
+3. TRECVID Dataset
+    - directory
+    
+    		data/TRECVID/[Year]/
+    
+    - In my case, we use TRECVID 2007 dataset. following description is about TRECVID 2007
+    1. request TRECVID videos through following [form](https://www-nlpir.nist.gov/projects/trecvid/SV.2010.forms/)
+        - download videos in shot.test provided from NIST
+        - save videos to `data/TRECVID/07/videos/test`
+    2. if you don't have annotations,
+        - download annotations from [here](https://trecvid.nist.gov/trecvid.data.html#tv07)
+        - unzip `sbref07.1.tar.gz` and save files to `data/TRECVID/07/`
+        - and then, execute `make_trecvid_dataset.py`
+            - copy TRECVID videos from other directory to `data/TRECVID/07/videos/test` when no video in `test` folder
+            - make annotations JSON file using XML files from `/ref/`
 
 ## Resources
-1. The trained model for Alexnet-like backbone. [BaiduYun](https://pan.baidu.com/s/16q3CNuUhLAGkm21PPOqUSg), [Google Drive](https://drive.google.com/open?id=145NCxLhgdrKPIYm-qgp1SRYU_GFmzxxX)
+1. pre-trained Shot Boundary Detection models
+    - used models in this repository ([from here](https://github.com/Tangshitao/ClipShots_basline))
+        1. The trained model for Alexnet-like backbone. [BaiduYun](https://pan.baidu.com/s/16q3CNuUhLAGkm21PPOqUSg), [Google Drive](https://drive.google.com/open?id=145NCxLhgdrKPIYm-qgp1SRYU_GFmzxxX)
+        2. The trained model for ResNet-18 backbone. [BaiduYun](https://pan.baidu.com/s/1Bx2uVVQOuEnTxdBBGV3uCQ), [Google Drive](https://drive.google.com/file/d/1CVqxAp17OOBmNq9_jgEdaoDbrmK5Bmog/view?usp=sharing)
+    - save to `models/`
+2. pre-trained kinetics models
+    - You can download pre-trained models ([from here](https://drive.google.com/drive/folders/1zvl89AgFAApbH0At-gMuZSeQB_LpNP-M))
+    - used models in this repository
+        1. resnet-18-kinetics.pth
+        2. resnet-50-kinetics.pth
+        3. resnext-101-kinetics.pth
+    - save to directory `kinetics_pretrained_model/`
 
-# Traning and Testing
-1. Training : opts.py → phase='train'
-2. Testing : opts.py → phase='test'
-3. Training and Testing : opts.py → phase='full'
-4. Run `run_[OS_type].sh`
+## Experiment result
+
+### Dataset
+use ClipShots and TRECVID 2007 Dataset. no RAI
+
+### Model
+1. resnext-101
+	1. no pre-trained kinetics model
+		- command (example)
+
+	          python main_baseline.py --phase test --dataset ClipShots --test_weight results/model_final/model_final_resnext_noPre_epoch5.pth --train_data_type normal --model resnext --model_depth 101 --pretrained_model False --loss_type normal --sample_size 128
+
+	2. use pre-trained kinetics model
+		- command (example)
+
+              python main_baseline.py --phase test --dataset ClipShots --test_weight results/model_final/model_final_resnext_epoch5.pth --train_data_type normal --model resnext --model_depth 101 --pretrained_model True --loss_type normal --sample_size 128
+
+2. Knowledge distillation(teacher: alexnet, student: resnext-101)
+	1. no pre-trained kinetics model
+		- command (example)
+
+              python main_baseline.py --phase test --dataset ClipShots --test_weight results/model_final/model_final_teacher_noPre_epoch5.pth --train_data_type normal --model resnext --model_depth 101 --pretrained_model False --loss_type KDloss --sample_size 128
+
+	2. use pre-trained kinetics model
+		- command (example)
+
+		      python main_baseline.py --phase test --dataset ClipShots --test_weight results/model_final/model_final_teacher_epoch5.pth --train_data_type normal --model resnext --model_depth 101 --pretrained_model True --loss_type KDloss --sample_size 128
+
+3. detector (use pre-trained kinetics model)
+	- command (example)
+
+	      python main_baseline.py --phase test --dataset ClipShots --test_weight results/model_final/model_final_detector_epoch5.pth --train_data_type cut --layer_policy second --model detector --baseline_model resnet --model_depth 50 --pretrained_model True --loss_type multiloss --sample_size 64
+
+
+## Traning and Testing
+#### - Change options in files <code>opts.py</code> and <code>utils/config.py</code> or
+#### - run command python
+
+1. Training
+    - options
+        - phase
+
+              --phase train
+
+        - Dataset (only ClipShots)
+
+              --dataset ClipShots
+
+        - Model
+
+              - alexnet / resnet / resnext
+            
+                  --model alexnet --train_data_type normal --loss_type normal
+                  --model resnet -model_depth 18 --train_data_type normal --loss_type normal
+                  --model resnext --model_depth 101 --train_data_type normal --loss_type normal
+
+              - detector
+                
+                  --model detector --baseline_model resnet --model_depth 50 --train_data_type cut --layer_policy second --loss_type multiloss --sample_size 64
+
+        - use/no pre-trained model
+
+              --pretrained_model True/False
+
+        - loss function
+
+              - normal (only classification)
+                  --loss_type normal
+
+              - KDloss (only classification)
+                  --loss_type KDloss
+              
+              - multiloss (classification + regression)
+                  --loss_type multiloss
+
+    - command (example)
+
+          python main_baseline.py --phase train --dataset ClipShots  --model detector --baseline_model resnet --model_depth 50 --pretrained_model True --loss_type multiloss --sample_size 64
+
+2. Testing : `opts.py` → phase='test'
+    - options
+        - phase
+            
+              --phase test
+        
+        - Dataset
+        
+              --dataset ClipShots
+              --dataset RAI
+              --dataset TRECVID[year]
+                ex) TRECVID07 (only 2007 year possible)
+        
+        - Model
+
+              - alexnet / resnet / resnext
+            
+                  --model alexnet --train_data_type normal --loss_type normal
+                  --model resnet -model_depth 18 --train_data_type normal --loss_type normal
+                  --model resnext --model_depth 101 --train_data_type normal --loss_type normal
+
+              - detector
+                
+                  --model detector --baseline_model resnet --model_depth 50 --train_data_type cut --layer_policy second --loss_type multiloss --sample_size 64
+
+        - use/no pre-trained model
+        
+                      --pretrained_model True/False
+
+    - command (example)
+
+            python main_baseline.py --phase test --dataset ClipShots --test_weight results/model_final/model_final_detector_epoch5.pth --train_data_type cut --layer_policy second --model detector --baseline_model resnet --model_depth 50 --pretrained_model True --loss_type multiloss --sample_size 64
+
+3. Training and Testing
+    
+    - phase='full'
+
+4. Running code
+ 
+    - if change files, Run `run_[OS_type].sh`
+    - else, Run python file `main_baseline.py` with options
