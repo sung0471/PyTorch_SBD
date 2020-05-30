@@ -8,6 +8,22 @@
 	[paper](https://arxiv.org/pdf/1808.04234.pdf),
 	[code](https://github.com/Tangshitao/ClipShots_basline)
 
+## Requirement
+    requirement.txt
+    
+    or
+    
+    Window 10
+    conda create--name pytorch100 python=3.6
+    conda install pytorch=1.0.1 torchvision=0.2.2 cudatoolkit=10.0 -c pytorch
+    conda install -c menpo ffmpeg=2.7.0
+    conda install -c conda-forge opencv=3.4.2
+    conda install tensorboardx=1.6
+    conda install scikit-learn=0.20.3
+    pip install matplotlib==3.0.3
+    pip install tensorflow==1.15.2
+    pip install thop==0.0.23
+
 ## Dataset
 - directory structure
     
@@ -48,12 +64,12 @@
 
 ## Resources
 1. pre-trained Shot Boundary Detection models
-    - used models in this repository ([from here](https://github.com/Tangshitao/ClipShots_basline))
+    - used models in this repository ([GitHub](https://github.com/Tangshitao/ClipShots_basline))
         1. The trained model for Alexnet-like backbone. [BaiduYun](https://pan.baidu.com/s/16q3CNuUhLAGkm21PPOqUSg), [Google Drive](https://drive.google.com/open?id=145NCxLhgdrKPIYm-qgp1SRYU_GFmzxxX)
         2. The trained model for ResNet-18 backbone. [BaiduYun](https://pan.baidu.com/s/1Bx2uVVQOuEnTxdBBGV3uCQ), [Google Drive](https://drive.google.com/file/d/1CVqxAp17OOBmNq9_jgEdaoDbrmK5Bmog/view?usp=sharing)
     - save to `models/`
 2. pre-trained kinetics models
-    - You can download pre-trained models ([from here](https://drive.google.com/drive/folders/1zvl89AgFAApbH0At-gMuZSeQB_LpNP-M))
+    - You can download pre-trained models ([Google Drive](https://drive.google.com/drive/folders/1zvl89AgFAApbH0At-gMuZSeQB_LpNP-M))
     - used models in this repository
         1. resnet-18-kinetics.pth
         2. resnet-50-kinetics.pth
@@ -65,30 +81,30 @@
 ### Dataset
 use ClipShots and TRECVID 2007 Dataset. no RAI
 
-### Model
+### Model([Google Drive](https://drive.google.com/drive/folders/1iWtSmHIagl5SourwSM_BOyYJqiKbeKH9?usp=sharing))
 1. resnext-101
-	1. no pre-trained kinetics model
+	1. no pre-trained kinetics model([Google Drive](https://drive.google.com/file/d/1cXk9eYTb9BMcTSHucN0xUqrD6b0suVoI/view?usp=sharing))
 		- command (example)
 
 	          python main_baseline.py --phase test --dataset ClipShots --test_weight results/model_final/model_final_resnext_noPre_epoch5.pth --train_data_type normal --model resnext --model_depth 101 --pretrained_model False --loss_type normal --sample_size 128
 
-	2. use pre-trained kinetics model
+	2. use pre-trained kinetics model([Google Drive](https://drive.google.com/file/d/1xAMws_Tw4gMiSzcwD2c3lRiz9Fx_rN9G/view?usp=sharing))
 		- command (example)
 
               python main_baseline.py --phase test --dataset ClipShots --test_weight results/model_final/model_final_resnext_epoch5.pth --train_data_type normal --model resnext --model_depth 101 --pretrained_model True --loss_type normal --sample_size 128
 
 2. Knowledge distillation(teacher: alexnet, student: resnext-101)
-	1. no pre-trained kinetics model
+	1. no pre-trained kinetics model([Google Drive](https://drive.google.com/file/d/19eZ7GZ7LaZeBcRpHP_vtDAxdun5oee7_/view?usp=sharing))
 		- command (example)
 
               python main_baseline.py --phase test --dataset ClipShots --test_weight results/model_final/model_final_teacher_noPre_epoch5.pth --train_data_type normal --model resnext --model_depth 101 --pretrained_model False --loss_type KDloss --sample_size 128
 
-	2. use pre-trained kinetics model
+	2. use pre-trained kinetics model([Google Drive](https://drive.google.com/file/d/1j5vCuZTxH-krPQG1_qU6K6Q12_gUYIQ-/view?usp=sharing))
 		- command (example)
 
 		      python main_baseline.py --phase test --dataset ClipShots --test_weight results/model_final/model_final_teacher_epoch5.pth --train_data_type normal --model resnext --model_depth 101 --pretrained_model True --loss_type KDloss --sample_size 128
 
-3. detector (use pre-trained kinetics model)
+3. detector (use pre-trained kinetics model)([Google Drive](https://drive.google.com/file/d/1QtsQduLUDsz4aE5cDJRJxkMRHwmuUpgb/view?usp=sharing))
 	- command (example)
 
 	      python main_baseline.py --phase test --dataset ClipShots --test_weight results/model_final/model_final_detector_epoch5.pth --train_data_type cut --layer_policy second --model detector --baseline_model resnet --model_depth 50 --pretrained_model True --loss_type multiloss --sample_size 64
@@ -166,11 +182,11 @@ use ClipShots and TRECVID 2007 Dataset. no RAI
 
         - use/no pre-trained model
         
-                      --pretrained_model True/False
+              --pretrained_model True/False
 
     - command (example)
 
-            python main_baseline.py --phase test --dataset ClipShots --test_weight results/model_final/model_final_detector_epoch5.pth --train_data_type cut --layer_policy second --model detector --baseline_model resnet --model_depth 50 --pretrained_model True --loss_type multiloss --sample_size 64
+          python main_baseline.py --phase test --dataset ClipShots --test_weight results/model_final/model_final_detector_epoch5.pth --train_data_type cut --layer_policy second --model detector --baseline_model resnet --model_depth 50 --pretrained_model True --loss_type multiloss --sample_size 64
 
 3. Training and Testing
     
