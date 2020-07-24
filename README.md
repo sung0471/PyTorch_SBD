@@ -7,6 +7,9 @@
     - Fast Video Shot Transition Localization with Deep Structured Models
 	[paper](https://arxiv.org/pdf/1808.04234.pdf),
 	[code](https://github.com/Tangshitao/ClipShots_basline)
+- This code is based on two papers
+    - (KR) Shot Boundary Detection Model using Knowledge Distillation[Link](https://www.koreascience.or.kr/article/CFKO201920461757385.pdf)
+    - (KR) The Cut Transition Detection Model Using the SSD Method[Link](http://kiise.or.kr/e_journal/2020/7/JOK/pdf/05.pdf)
 
 ## Requirement
     requirement.txt
